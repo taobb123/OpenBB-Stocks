@@ -46,9 +46,13 @@ class MarketStructureAnalyzer:
         self.use_akshare = use_akshare and AKSHARE_AVAILABLE
         if self.use_akshare:
             try:
-                self.akshare = AKShareDataSource()
+                # 从环境变量获取 iTick token，如果未设置则使用默认值
+                itick_token = os.getenv("ITICK_TOKEN", "220b3fa701b740a98b2a661a543b9744a78831747db44c898cfca3a36b924332")
+                self.akshare = AKShareDataSource(itick_token=itick_token)
                 if self.akshare.available:
                     print("✅ AKShare 数据源已启用")
+                    if self.akshare.itick_available:
+                        print("✅ iTick API 已启用（用于实时行情）")
                 else:
                     print("⚠️ AKShare 不可用，将使用 yfinance")
                     self.use_akshare = False
@@ -1514,13 +1518,14 @@ class MarketStructureAnalyzer:
         
         return top_5
     
-    async def run_full_analysis(self, index_query: str = "China", market_type: str = "A股") -> Dict[str, Any]:
+    async def run_full_analysis(self, index_query: str = "China", market_type: str = "A股", skip_stock_screening: bool = False) -> Dict[str, Any]:
         """
         运行完整分析
         
         Args:
             index_query: 指数搜索关键词
             market_type: 市场类型，"A股" 或 "美股"（默认A股）
+            skip_stock_screening: 是否跳过股票筛选和报告生成（只分析到强势行业）
         
         Returns:
             完整分析结果
@@ -1528,6 +1533,8 @@ class MarketStructureAnalyzer:
         print("\n" + "🚀 开始市场结构分析")
         print("="*60)
         print(f"📊 市场类型: {market_type}")
+        if skip_stock_screening:
+            print("📌 模式: 仅分析到强势行业（跳过个股筛选）")
         print("="*60)
         
         # 如果index_query包含市场类型关键词，自动判断
@@ -1546,23 +1553,29 @@ class MarketStructureAnalyzer:
         sector_analysis = self.analyze_sector_strength(sector_data)
         capital_preference = self.analyze_capital_preference(sector_data, indices_data)
         
-        # 3. 从强势行业中筛选股票
-        print("\n" + "="*60)
-        print("📊 Step 3: 从强势行业中筛选股票")
-        print("="*60)
-        
-        strong_sectors = sector_analysis.get("strong_sectors", [])
+        # 3. 从强势行业中筛选股票（如果未跳过）
         stock_candidates = []
-        
-        if strong_sectors:
-            # 使用传入的market_type参数（默认A股）
-            stock_candidates = await self.screen_stocks_from_strong_sectors(
-                strong_sectors, 
-                limit_per_sector=5,
-                market_type=market_type
-            )
+        if not skip_stock_screening:
+            print("\n" + "="*60)
+            print("📊 Step 3: 从强势行业中筛选股票")
+            print("="*60)
+            
+            strong_sectors = sector_analysis.get("strong_sectors", [])
+            
+            if strong_sectors:
+                # 使用传入的market_type参数（默认A股）
+                stock_candidates = await self.screen_stocks_from_strong_sectors(
+                    strong_sectors, 
+                    limit_per_sector=5,
+                    market_type=market_type
+                )
+            else:
+                print("⚠️ 未识别到强势行业，跳过股票筛选")
         else:
-            print("⚠️ 未识别到强势行业，跳过股票筛选")
+            print("\n" + "="*60)
+            print("📊 Step 3: 跳过个股筛选（仅分析到强势行业）")
+            print("="*60)
+            print("✅ 强势行业分析完成")
         
         # 4. 汇总结果
         result = {
@@ -1581,29 +1594,36 @@ class MarketStructureAnalyzer:
             "stock_candidates": stock_candidates
         }
         
-        # 5. 生成并保存报告
-        print("\n" + "="*60)
-        print("📝 生成投资报告...")
-        print("="*60)
+        # 5. 生成并保存报告（如果未跳过）
+        if not skip_stock_screening:
+            print("\n" + "="*60)
+            print("📝 生成投资报告...")
+            print("="*60)
+            
+            full_analysis = {
+                "analysis": {
+                    "market_regime": market_regime,
+                    "sector_strength": sector_analysis,
+                    "capital_preference": capital_preference
+                },
+                "stock_candidates": stock_candidates,
+                "strategy_analysis": None
+            }
+            
+            report = self.generate_investment_report(full_analysis)
+            
+            # 保存报告到文件（纯数字日期格式，重复时加序号）
+            report_filename = self._generate_report_filename("investment_report")
+            with open(report_filename, "w", encoding="utf-8") as f:
+                f.write(report)
+            
+            print(f"📄 文本报告已保存到: {report_filename}")
+        else:
+            print("\n" + "="*60)
+            print("📝 跳过报告生成（仅分析到强势行业）")
+            print("="*60)
         
-        full_analysis = {
-            "analysis": {
-                "market_regime": market_regime,
-                "sector_strength": sector_analysis,
-                "capital_preference": capital_preference
-            },
-            "stock_candidates": stock_candidates,
-            "strategy_analysis": None
-        }
-        
-        report = self.generate_investment_report(full_analysis)
-        
-        # 保存报告到文件（纯数字日期格式，重复时加序号）
-        report_filename = self._generate_report_filename("investment_report")
-        with open(report_filename, "w", encoding="utf-8") as f:
-            f.write(report)
-        
-        # 保存JSON结果
+        # 保存JSON结果（无论是否跳过股票筛选都保存）
         json_filename = "market_analysis_result.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
@@ -1611,8 +1631,9 @@ class MarketStructureAnalyzer:
         print("\n" + "="*60)
         print("✅ 分析完成")
         print("="*60)
-        print(f"📄 文本报告已保存到: {report_filename}")
         print(f"📊 JSON数据已保存到: {json_filename}")
+        if skip_stock_screening:
+            print("📌 本次分析仅包含市场状态和强势行业分析，未包含个股筛选")
         print("\n" + "="*60)
         
         return result

@@ -1,0 +1,806 @@
+{
+  "timestamp": "2025-11-18T23:51:36.062920",
+  "market_type": "A股",
+  "stocks": [
+    {
+      "symbol": "002475",
+      "timing": {
+        "symbol": "002475",
+        "current_price": 56.61,
+        "indicators": {
+          "MA": {
+            "MA5": 56.964,
+            "MA20": 60.7625,
+            "MA60": 55.583000000000006,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 15.954052329291642,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 70.2,
+            "low_52w": 28.48,
+            "current": 56.61,
+            "position_percent": 67.42569511025887,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 1054029.0,
+            "avg_20d": 1388989.3,
+            "ratio": 0.7588460184682488,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002475",
+        "info": {
+          "最新": 56.61,
+          "股票代码": "002475",
+          "股票简称": "立讯精密",
+          "总股本": 7282103432.0,
+          "流通股": 7265625627.0,
+          "总市值": 412239875285.52,
+          "流通市值": 411307066744.47,
+          "行业": "消费电子",
+          "上市时间": 20100915
+        },
+        "fundamentals": {
+          "营业收入": 351080838.82,
+          "净利润": 34758707.29,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 56.61,
+          "high_52w": 70.2,
+          "low_52w": 28.48
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002475.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "002241",
+      "timing": {
+        "symbol": "002241",
+        "current_price": 28.4,
+        "indicators": {
+          "MA": {
+            "MA5": 28.844,
+            "MA20": 31.360499999999995,
+            "MA60": 32.489999999999995,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 11.404728789986095,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 39.44,
+            "low_52w": 18.59,
+            "current": 28.4,
+            "position_percent": 47.05035971223022,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 446106.0,
+            "avg_20d": 785106.8,
+            "ratio": 0.5682105924951866,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002241",
+        "info": {
+          "最新": 28.4,
+          "股票代码": "002241",
+          "股票简称": "歌尔股份",
+          "总股本": 3545644932.0,
+          "流通股": 3138467080.0,
+          "总市值": 100696316068.79999,
+          "流通市值": 89132465072.0,
+          "行业": "消费电子",
+          "上市时间": 20080522
+        },
+        "fundamentals": {
+          "营业收入": 102940251.5,
+          "净利润": 14616018.29,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 28.4,
+          "high_52w": 39.44,
+          "low_52w": 18.59
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002241.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "000725",
+      "timing": {
+        "symbol": "000725",
+        "current_price": 3.93,
+        "indicators": {
+          "MA": {
+            "MA5": 3.9939999999999998,
+            "MA20": 4.0305,
+            "MA60": 4.0905000000000005,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 26.66666666666653,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 4.54,
+            "low_52w": 3.68,
+            "current": 3.93,
+            "position_percent": 29.069767441860467,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 4187632.0,
+            "avg_20d": 4016775.45,
+            "ratio": 1.0425357484197928,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "000725",
+        "info": {
+          "最新": 3.93,
+          "股票代码": "000725",
+          "股票简称": "京东方Ａ",
+          "总股本": 37413880464.0,
+          "流通股": 36706050201.0,
+          "总市值": 147036550223.52002,
+          "流通市值": 144254777289.93,
+          "行业": "光学光电子",
+          "上市时间": 20010112
+        },
+        "fundamentals": {
+          "营业收入": 134792000.0,
+          "净利润": 100586000.0,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 3.93,
+          "high_52w": 4.54,
+          "low_52w": 3.68
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 000725.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "603986",
+      "timing": {
+        "symbol": "603986",
+        "current_price": 202.5,
+        "indicators": {
+          "MA": {
+            "MA5": 210.55599999999998,
+            "MA20": 221.63100000000003,
+            "MA60": 194.38966666666667,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 33.32758174445689,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 246.95,
+            "low_52w": 82.88,
+            "current": 202.5,
+            "position_percent": 72.90790516243068,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 274378.0,
+            "avg_20d": 407499.25,
+            "ratio": 0.6733214846407692,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "603986",
+        "info": {
+          "最新": 202.5,
+          "股票代码": "603986",
+          "股票简称": "兆易创新",
+          "总股本": 667849351.0,
+          "流通股": 667810136.0,
+          "总市值": 135239493577.5,
+          "流通市值": 135231552540.0,
+          "行业": "半导体",
+          "上市时间": 20160818
+        },
+        "fundamentals": {
+          "营业收入": 321846304.44,
+          "净利润": 17875280.4,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 202.5,
+          "high_52w": 246.95,
+          "low_52w": 82.88
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 603986.SS -> SSLError: Failed to perform, curl: (35) Recv failure: Connection was reset. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.'}"
+      }
+    },
+    {
+      "symbol": "603501",
+      "timing": {
+        "symbol": "603501",
+        "current_price": 122.3,
+        "indicators": {
+          "MA": {
+            "MA5": 122.748,
+            "MA20": 127.92650000000003,
+            "MA60": 134.96266666666668,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 17.29702471003526,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 157.76,
+            "low_52w": 95.93,
+            "current": 122.3,
+            "position_percent": 42.64919941775837,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 107174.0,
+            "avg_20d": 138351.1,
+            "ratio": 0.7746523157387256,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "603501",
+        "info": {
+          "最新": 122.3,
+          "股票代码": "603501",
+          "股票简称": "豪威集团",
+          "总股本": 1209404099.0,
+          "流通股": 1209404099.0,
+          "总市值": 147910121307.69998,
+          "流通市值": 147910121307.69998,
+          "行业": "半导体",
+          "上市时间": 20170504
+        },
+        "fundamentals": {
+          "营业收入": 1005644824.39,
+          "净利润": 86299130.19,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 122.3,
+          "high_52w": 157.76,
+          "low_52w": 95.93
+        }
+      },
+      "profile": {
+        "error": ""
+      }
+    },
+    {
+      "symbol": "600703",
+      "timing": {
+        "symbol": "600703",
+        "current_price": 13.43,
+        "indicators": {
+          "MA": {
+            "MA5": 13.548000000000002,
+            "MA20": 13.9125,
+            "MA60": 14.606666666666667,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 27.2300469483568,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 16.24,
+            "low_52w": 10.59,
+            "current": 13.43,
+            "position_percent": 50.26548672566372,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 364601.0,
+            "avg_20d": 539927.65,
+            "ratio": 0.6752775117184682,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600703",
+        "info": {
+          "最新": 13.43,
+          "股票代码": "600703",
+          "股票简称": "三安光电",
+          "总股本": 4989018727.0,
+          "流通股": 4989018727.0,
+          "总市值": 67002521503.61,
+          "流通市值": 67002521503.61,
+          "行业": "光学光电子",
+          "上市时间": 19960528
+        },
+        "fundamentals": {
+          "营业收入": 317973460.0,
+          "净利润": 24007097.0,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 13.43,
+          "high_52w": 16.24,
+          "low_52w": 10.59
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 603501.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "600745",
+      "timing": {
+        "symbol": "600745",
+        "current_price": 41.93,
+        "indicators": {
+          "MA": {
+            "MA5": 43.852000000000004,
+            "MA20": 43.782999999999994,
+            "MA60": 42.97149999999999,
+            "trend": "上升"
+          },
+          "RSI": {
+            "value": 41.10831234256926,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 49.4,
+            "low_52w": 28.61,
+            "current": 41.93,
+            "position_percent": 64.06926406926408,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 570804.0,
+            "avg_20d": 1085118.85,
+            "ratio": 0.5260290151627169,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "✅ 均线呈上升趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600745",
+        "info": {
+          "最新": 41.93,
+          "股票代码": "600745",
+          "股票简称": "闻泰科技",
+          "总股本": 1244636119.0,
+          "流通股": 1244636119.0,
+          "总市值": 52187592469.67,
+          "流通市值": 52187592469.67,
+          "行业": "半导体",
+          "上市时间": 19960828
+        },
+        "fundamentals": {
+          "营业收入": 82474161.71,
+          "净利润": 16736869.34,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 41.93,
+          "high_52w": 49.4,
+          "low_52w": 28.61
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 600745.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "002049",
+      "timing": {
+        "symbol": "002049",
+        "current_price": 76.23,
+        "indicators": {
+          "MA": {
+            "MA5": 76.05,
+            "MA20": 80.49699999999999,
+            "MA60": 80.96900000000002,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 26.018002571796018,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 92.78,
+            "low_52w": 57.74,
+            "current": 76.23,
+            "position_percent": 52.76826484018265,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 166560.0,
+            "avg_20d": 234523.85,
+            "ratio": 0.7102049535686882,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002049",
+        "info": {
+          "最新": 76.23,
+          "股票代码": "002049",
+          "股票简称": "紫光国微",
+          "总股本": 849624032.0,
+          "流通股": 849472307.0,
+          "总市值": 64766839959.36,
+          "流通市值": 64755273962.61,
+          "行业": "半导体",
+          "上市时间": 20050606
+        },
+        "fundamentals": {
+          "营业收入": 98444649.94,
+          "净利润": 12859753.33,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 76.23,
+          "high_52w": 92.78,
+          "low_52w": 57.74
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002049.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "603160",
+      "timing": {
+        "symbol": "603160",
+        "current_price": 82.19,
+        "indicators": {
+          "MA": {
+            "MA5": 82.49799999999999,
+            "MA20": 83.278,
+            "MA60": 80.94133333333335,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 42.15080346106304,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 91.16,
+            "low_52w": 64.31,
+            "current": 82.19,
+            "position_percent": 66.59217877094972,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 65377.0,
+            "avg_20d": 104074.4,
+            "ratio": 0.628175612830821,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "603160",
+        "info": {
+          "最新": 82.19,
+          "股票代码": "603160",
+          "股票简称": "汇顶科技",
+          "总股本": 464662636.0,
+          "流通股": 464662636.0,
+          "总市值": 38190622052.84,
+          "流通市值": 38190622052.84,
+          "行业": "半导体",
+          "上市时间": 20161017
+        },
+        "fundamentals": {
+          "营业收入": 86528036.0,
+          "净利润": 26524974.91,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 82.19,
+          "high_52w": 91.16,
+          "low_52w": 64.31
+        }
+      },
+      "profile": {
+        "error": ""
+      }
+    },
+    {
+      "symbol": "600584",
+      "timing": {
+        "symbol": "600584",
+        "current_price": 37.17,
+        "indicators": {
+          "MA": {
+            "MA5": 37.446000000000005,
+            "MA20": 39.4905,
+            "MA60": 39.575833333333335,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 23.900789177001116,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 47.0,
+            "low_52w": 29.85,
+            "current": 37.17,
+            "position_percent": 42.68221574344024,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 288684.0,
+            "avg_20d": 580170.65,
+            "ratio": 0.49758463307304496,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600584",
+        "info": {
+          "最新": 37.17,
+          "股票代码": "600584",
+          "股票简称": "长电科技",
+          "总股本": 1789414570.0,
+          "流通股": 1789414570.0,
+          "总市值": 66512539566.9,
+          "流通市值": 66512539566.9,
+          "行业": "半导体",
+          "上市时间": 20030603
+        },
+        "fundamentals": {
+          "营业收入": 427762348.65,
+          "净利润": 33906263.4,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 37.17,
+          "high_52w": 47.0,
+          "low_52w": 29.85
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 600584.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "000792",
+      "timing": {
+        "symbol": "000792",
+        "current_price": 26.35,
+        "indicators": {
+          "MA": {
+            "MA5": 26.398000000000003,
+            "MA20": 24.8435,
+            "MA60": 21.862,
+            "trend": "上升"
+          },
+          "RSI": {
+            "value": 57.00836820083683,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 27.75,
+            "low_52w": 15.1,
+            "current": 26.35,
+            "position_percent": 88.93280632411069,
+            "signal": "高位"
+          },
+          "Volume": {
+            "current": 1525806.0,
+            "avg_20d": 1064451.35,
+            "ratio": 1.4334201370499458,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 1,
+          "recommendation": "观望",
+          "factors": [
+            "✅ 均线呈上升趋势",
+            "⚠️ 价格处于52周高位"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "000792",
+        "info": {
+          "最新": 26.35,
+          "股票代码": "000792",
+          "股票简称": "盐湖股份",
+          "总股本": 5291572541.0,
+          "流通股": 5291541746.0,
+          "总市值": 139432936455.35,
+          "流通市值": 139432125007.1,
+          "行业": "化肥行业",
+          "上市时间": 19970904
+        },
+        "fundamentals": {
+          "营业收入": 150297345.62,
+          "净利润": 39793689.74,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 26.35,
+          "high_52w": 27.75,
+          "low_52w": 15.1
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 000792.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "000651",
+      "timing": {
+        "symbol": "000651",
+        "current_price": 40.11,
+        "indicators": {
+          "MA": {
+            "MA5": 40.614,
+            "MA20": 40.40050000000001,
+            "MA60": 41.21849999999999,
+            "trend": "上升"
+          },
+          "RSI": {
+            "value": 42.44791666666667,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 46.16,
+            "low_52w": 37.51,
+            "current": 40.11,
+            "position_percent": 30.057803468208117,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 265683.0,
+            "avg_20d": 426703.95,
+            "ratio": 0.622640123204859,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "✅ 均线呈上升趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "000651",
+        "info": {
+          "最新": 40.11,
+          "股票代码": "000651",
+          "股票简称": "格力电器",
+          "总股本": 5601405741.0,
+          "流通股": 5515155557.0,
+          "总市值": 224672384271.51,
+          "流通市值": 221212889391.27,
+          "行业": "家电行业",
+          "上市时间": 19961118
+        },
+        "fundamentals": {
+          "营业收入": 646777843.48,
+          "净利润": 48583288.19,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 40.11,
+          "high_52w": 46.16,
+          "low_52w": 37.51
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 000651.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    }
+  ]
+}

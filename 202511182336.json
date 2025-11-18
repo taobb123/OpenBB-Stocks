@@ -1,0 +1,73 @@
+{
+  "timestamp": "2025-11-18T23:36:28.355566",
+  "market_type": "A股",
+  "stocks": [
+    {
+      "symbol": "002475",
+      "timing": {
+        "symbol": "002475",
+        "current_price": 56.61,
+        "indicators": {
+          "MA": {
+            "MA5": 56.964,
+            "MA20": 60.7625,
+            "MA60": 55.583000000000006,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 15.954052329291642,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 70.2,
+            "low_52w": 28.48,
+            "current": 56.61,
+            "position_percent": 67.42569511025887,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 1054029.0,
+            "avg_20d": 1388989.3,
+            "ratio": 0.7588460184682488,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002475",
+        "info": {
+          "最新": 56.61,
+          "股票代码": "002475",
+          "股票简称": "立讯精密",
+          "总股本": 7282103432.0,
+          "流通股": 7265625627.0,
+          "总市值": 412239875285.52,
+          "流通市值": 411307066744.47,
+          "行业": "消费电子",
+          "上市时间": 20100915
+        },
+        "fundamentals": {
+          "营业收入": 351080838.82,
+          "净利润": 34758707.29,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 56.61,
+          "high_52w": 70.2,
+          "low_52w": 28.48
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002475.SZ -> SSLError: Failed to perform, curl: (35) TLS connect error: error:00000000:invalid library (0):OPENSSL_internal:invalid library (0). See https://curl.se/libcurl/c/libcurl-errors.html first for more details.'}"
+      }
+    }
+  ]
+}

@@ -7,14 +7,32 @@ import akshare as ak
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import pandas as pd
+import os
+
+# 尝试导入 requests（用于 iTick API）
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    print("⚠️ requests 未安装，iTick API 功能将不可用。请运行: pip install requests")
 
 
 class AKShareDataSource:
     """AKShare 数据源封装类"""
     
-    def __init__(self):
-        """初始化 AKShare 数据源"""
+    def __init__(self, itick_token: Optional[str] = None):
+        """
+        初始化 AKShare 数据源
+        
+        Args:
+            itick_token: iTick API token，如果不提供则从环境变量 ITICK_TOKEN 读取
+        """
         self.available = self._check_availability()
+        # 从环境变量或参数获取 iTick token
+        self.itick_token = itick_token or os.getenv("ITICK_TOKEN", "")
+        # iTick 可用需要同时满足：有 token 且 requests 库已安装
+        self.itick_available = bool(self.itick_token) and REQUESTS_AVAILABLE
     
     def _check_availability(self) -> bool:
         """检查 akshare 是否可用"""
@@ -291,39 +309,19 @@ class AKShareDataSource:
             except Exception as e:
                 print(f"  ⚠️ stock_financial_analysis_indicator 失败: {e}")
             
-            # 方法2：获取实时行情（使用新浪接口，不走push2）
-            spot_fetched = False
-            try:
-                print(f"  使用 stock_zh_a_spot 获取 {symbol} 实时行情...")
-                spot_data = ak.stock_zh_a_spot()
-                
-                spot_fetched = self._extract_realtime_from_spot_df(
-                    df=spot_data,
-                    symbol=symbol,
-                    fundamentals=fundamentals
-                )
-                if spot_fetched:
-                    print(f"  ✅ 通过 stock_zh_a_spot 获取到实时行情")
-            except Exception as e:
-                print(f"  ⚠️ stock_zh_a_spot 失败: {e}")
-            
-            # 如果新浪接口失败，尝试备用接口（可能走 push2，但作为兜底）
-            if not spot_fetched:
+            # 方法2：使用 iTick API 获取实时行情数据（补充到基本面数据中）
+            if self.itick_available:
                 try:
-                    print(f"  使用 stock_zh_a_spot_em 兜底获取 {symbol} 实时行情...")
-                    spot_data = ak.stock_zh_a_spot_em()
-                    
-                    spot_fetched = self._extract_realtime_from_spot_df(
-                        df=spot_data,
-                        symbol=symbol,
-                        fundamentals=fundamentals
-                    )
-                    if spot_fetched:
-                        print(f"  ✅ 通过 stock_zh_a_spot_em 获取到实时行情")
+                    print(f"  使用 iTick API 获取 {symbol} 实时行情...")
+                    realtime_data = self._get_realtime_from_itick(symbol)
+                    if realtime_data:
+                        # 将实时行情数据合并到基本面数据中
+                        fundamentals.update(realtime_data)
+                        print(f"  ✅ 通过 iTick API 获取到实时行情数据")
                 except Exception as e:
-                    print(f"  ⚠️ stock_zh_a_spot_em 也失败: {e}")
+                    print(f"  ⚠️ iTick API 获取实时行情失败: {e}")
             
-            # 方法3：获取财务报表摘要（如果前两个都失败）
+            # 方法3：获取财务报表摘要（如果方法1失败）
             if not fundamentals:
                 try:
                     print(f"  尝试使用 stock_financial_report_sina 获取 {symbol} 财务数据...")
@@ -341,6 +339,149 @@ class AKShareDataSource:
             
         except Exception as e:
             print(f"⚠️ 获取 {symbol} 基本面数据失败: {e}")
+            return {}
+    
+    def _get_realtime_from_itick(self, symbol: str) -> Dict[str, Any]:
+        """
+        使用 iTick API 获取股票实时行情数据
+        
+        Args:
+            symbol: 股票代码（6位数字，如 "600519"）
+        
+        Returns:
+            实时行情数据字典
+        """
+        if not self.itick_available:
+            return {}
+        
+        try:
+            # 根据股票代码确定交易所区域
+            # 上海：600xxx, 688xxx, 601xxx, 603xxx, 605xxx -> SH
+            # 深圳：000xxx, 002xxx, 300xxx, 301xxx -> SZ
+            if symbol.startswith(("600", "688", "601", "603", "605")):
+                region = "SH"
+            elif symbol.startswith(("000", "002", "300", "301")):
+                region = "SZ"
+            else:
+                # 默认尝试 SH
+                region = "SH"
+            
+            # 调用 iTick API
+            url = "https://api.itick.org/stock/tick"
+            params = {
+                "region": region,
+                "code": symbol
+            }
+            headers = {
+                "accept": "application/json",
+                "token": self.itick_token
+            }
+            
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 解析 iTick 返回的数据
+                realtime = {}
+                
+                # 根据 iTick API 返回的数据结构提取字段
+                # 注意：实际字段名可能因 API 版本而异，需要根据实际返回调整
+                
+                # 处理不同的返回格式
+                if isinstance(data, dict):
+                    # 如果返回的数据在 data 字段中
+                    if "data" in data and isinstance(data["data"], dict):
+                        data = data["data"]
+                    
+                    # 提取价格相关数据（尝试多个可能的字段名）
+                    price_fields = ["price", "last", "close", "current", "lastPrice", "closePrice"]
+                    for field in price_fields:
+                        if field in data and data[field] is not None:
+                            realtime["最新价"] = float(data[field])
+                            break
+                    
+                    # 提取涨跌幅
+                    change_fields = ["change_pct", "pct_chg", "changePercent", "pctChg", "change"]
+                    for field in change_fields:
+                        if field in data and data[field] is not None:
+                            realtime["涨跌幅"] = float(data[field])
+                            break
+                    
+                    # 提取成交量
+                    if "volume" in data and data["volume"] is not None:
+                        realtime["成交量"] = float(data["volume"])
+                    
+                    # 提取换手率
+                    turnover_fields = ["turnover_rate", "turnoverRate", "turnover"]
+                    for field in turnover_fields:
+                        if field in data and data[field] is not None:
+                            realtime["换手率"] = float(data[field])
+                            break
+                    
+                    # 提取市值
+                    mcap_fields = ["market_cap", "mkt_cap", "marketCap", "totalMarketCap"]
+                    for field in mcap_fields:
+                        if field in data and data[field] is not None:
+                            realtime["总市值"] = float(data[field])
+                            break
+                    
+                    # 提取市盈率
+                    pe_fields = ["pe", "pe_ratio", "peRatio", "P/E"]
+                    for field in pe_fields:
+                        if field in data and data[field] is not None:
+                            realtime["市盈率"] = float(data[field])
+                            break
+                    
+                    # 提取市净率
+                    pb_fields = ["pb", "pb_ratio", "pbRatio", "P/B"]
+                    for field in pb_fields:
+                        if field in data and data[field] is not None:
+                            realtime["市净率"] = float(data[field])
+                            break
+                    
+                    # 提取涨跌额
+                    if "change" in data and data["change"] is not None:
+                        # 如果 change 是价格变化（不是百分比），也保存
+                        if "涨跌幅" not in realtime:
+                            try:
+                                # 尝试计算涨跌幅（如果有 price 和 change）
+                                if "最新价" in realtime and realtime["最新价"] > 0:
+                                    realtime["涨跌幅"] = (float(data["change"]) / realtime["最新价"]) * 100
+                            except:
+                                pass
+                    
+                elif isinstance(data, list) and len(data) > 0:
+                    # 如果返回的是列表，取第一个元素
+                    item = data[0] if isinstance(data[0], dict) else {}
+                    # 递归处理（将 item 作为 dict 处理）
+                    if isinstance(item, dict):
+                        # 使用相同的字段提取逻辑
+                        price_fields = ["price", "last", "close", "current"]
+                        for field in price_fields:
+                            if field in item and item[field] is not None:
+                                realtime["最新价"] = float(item[field])
+                                break
+                        
+                        change_fields = ["change_pct", "pct_chg", "changePercent"]
+                        for field in change_fields:
+                            if field in item and item[field] is not None:
+                                realtime["涨跌幅"] = float(item[field])
+                                break
+                        
+                        if "volume" in item and item["volume"] is not None:
+                            realtime["成交量"] = float(item["volume"])
+                
+                return realtime
+            else:
+                print(f"  ⚠️ iTick API 返回错误状态码: {response.status_code}")
+                return {}
+                
+        except requests.exceptions.RequestException as e:
+            print(f"  ⚠️ iTick API 请求异常: {e}")
+            return {}
+        except Exception as e:
+            print(f"  ⚠️ iTick API 解析数据异常: {e}")
             return {}
 
     def _extract_realtime_from_spot_df(

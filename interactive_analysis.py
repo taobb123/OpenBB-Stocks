@@ -381,11 +381,125 @@ class InteractiveMarketAnalyzer:
             
             report.append("")
         
+        # 添加策略推荐和风险提示
+        report.append("="*60)
+        report.append("5. 策略推荐（趋势/反转）")
+        report.append("-"*60)
+        report.append(self._format_strategy_recommendation_for_stocks(analysis.get("stocks", [])))
+        report.append("")
+        
+        report.append("6. 风险提示与触发点")
+        report.append("-"*60)
+        report.append(self._format_risk_warnings())
+        report.append("")
+        
         report.append("="*60)
         report.append("报告结束")
         report.append("="*60)
         
         return "\n".join(report)
+    
+    def _format_strategy_recommendation_for_stocks(self, stocks: List[Dict[str, Any]]) -> str:
+        """
+        基于股票分析结果生成策略推荐
+        
+        Args:
+            stocks: 股票分析结果列表
+        
+        Returns:
+            策略推荐文本
+        """
+        if not stocks:
+            return "待分析（需要指定股票进行策略回测）"
+        
+        # 分析所有股票的时机评分，判断整体市场状态
+        total_score = 0
+        buy_count = 0
+        watch_count = 0
+        caution_count = 0
+        
+        for stock in stocks:
+            timing = stock.get("timing", {})
+            if timing and "timing" in timing:
+                timing_info = timing["timing"]
+                score = timing_info.get("score", 0)
+                recommendation = timing_info.get("recommendation", "观望")
+                
+                total_score += score
+                if recommendation == "买入":
+                    buy_count += 1
+                elif recommendation == "观望":
+                    watch_count += 1
+                else:
+                    caution_count += 1
+        
+        # 判断市场状态
+        avg_score = total_score / len(stocks) if stocks else 0
+        
+        if avg_score >= 3:
+            market_regime = "趋势市场"
+            recommended_strategy = "趋势策略（MA交叉）"
+            strategy_explanation = """
+趋势策略分析：
+- 当前市场呈现上升趋势特征
+- 建议使用移动平均线（MA）交叉策略
+- 当快线上穿慢线时产生买入信号
+- 当快线下穿慢线时产生卖出信号
+- 适合当前市场环境
+"""
+        elif avg_score <= -1:
+            market_regime = "震荡市场"
+            recommended_strategy = "反转策略（均值回归）"
+            strategy_explanation = """
+反转策略分析：
+- 当前市场呈现震荡特征
+- 建议使用均值回归（MR）策略
+- 当价格偏离均值超过阈值时入场
+- 当价格回归到均值附近时出场
+- 适合当前市场环境
+"""
+        else:
+            market_regime = "混合市场"
+            recommended_strategy = "混合策略"
+            strategy_explanation = """
+混合策略分析：
+- 当前市场状态不明确，建议采用混合策略
+- 可以结合趋势和反转策略
+- 根据个股具体情况选择合适策略
+- 注意风险控制
+"""
+        
+        result = f"市场状态: {market_regime}\n"
+        result += f"推荐策略: {recommended_strategy}\n"
+        result += f"\n股票分析统计:\n"
+        result += f"  买入建议: {buy_count} 只\n"
+        result += f"  观望建议: {watch_count} 只\n"
+        result += f"  谨慎建议: {caution_count} 只\n"
+        result += f"  平均评分: {avg_score:.2f}\n"
+        result += strategy_explanation
+        
+        return result
+    
+    def _format_risk_warnings(self) -> str:
+        """
+        格式化风险提示与触发点
+        
+        Returns:
+            风险提示文本
+        """
+        return """风险提示：
+1. 市场波动风险：注意市场环境变化，及时调整策略
+2. 行业轮动风险：强势行业可能回调，关注行业轮动信号
+3. 个股风险：关注基本面变化，定期审查持仓股票
+4. 策略风险：不同市场环境适用不同策略，避免策略僵化
+5. 流动性风险：注意市场流动性变化，避免在极端市场条件下操作
+
+触发点：
+- 市场状态改变时重新评估策略和持仓
+- 行业表现反转时及时调整持仓结构
+- 个股基本面恶化时及时止损，避免损失扩大
+- 技术指标出现明显反转信号时考虑减仓
+- 市场出现系统性风险时降低仓位，保护本金"""
     
     async def interactive_workflow(self):
         """
@@ -436,11 +550,12 @@ class InteractiveMarketAnalyzer:
             stock_symbols = [s.strip() for s in input_str.replace(",", " ").split() if s.strip()]
         
         elif choice == "4":
-            # 完整市场分析
-            print("\n运行完整市场分析...")
+            # 完整市场分析（仅分析到强势行业，不筛选个股）
+            print("\n运行完整市场分析（仅分析到强势行业）...")
             result = await self.analyzer.run_full_analysis(
                 index_query="China",
-                market_type="A股"
+                market_type="A股",
+                skip_stock_screening=True  # 跳过个股筛选和报告生成
             )
             return result
         
