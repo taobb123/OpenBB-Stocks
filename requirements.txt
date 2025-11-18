@@ -1,0 +1,4 @@
+httpx
+pandas
+akshare>=1.12.0
+
