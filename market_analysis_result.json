@@ -1,0 +1,462 @@
+{
+  "timestamp": "2025-11-18T13:22:54.348515",
+  "data_sources": {
+    "indices": {
+      "results": [
+        {
+          "symbol": "FXPIV",
+          "name": "PROSHARES ULTRASHORT FTSE CHINA 50 ETF",
+          "description": "PROSHARES ULTRASHORT FTSE CHINA 50 ETF\n",
+          "data_delay": 15,
+          "currency": "USD",
+          "time_zone": "America/Chicago",
+          "open_time": "08:00:00",
+          "close_time": "16:00:00",
+          "tick_days": "MonToFri",
+          "tick_frequency": "C",
+          "tick_period": "Regular",
+          "display_override_auto_hide": false,
+          "index_family": null,
+          "index_family_relationship": null,
+          "index_launch_date": null,
+          "show_intraday_chart": true,
+          "tick_interval_seconds": null
+        },
+        {
+          "symbol": "VXFXI",
+          "name": "Cboe China Large-Cap ETF Volatility Index",
+          "description": "Cboe China Large-Cap ETF Volatility Index",
+          "data_delay": 15,
+          "currency": "USD",
+          "time_zone": "America/Chicago",
+          "open_time": "08:30:00",
+          "close_time": "15:15:00",
+          "tick_days": "MonToFri",
+          "tick_frequency": "C",
+          "tick_period": "Regular",
+          "display_override_auto_hide": false,
+          "index_family": null,
+          "index_family_relationship": null,
+          "index_launch_date": null,
+          "show_intraday_chart": true,
+          "tick_interval_seconds": null
+        },
+        {
+          "symbol": "XPPIV",
+          "name": "PROSHARES ULTRA FTSE CHINA 50 ETF",
+          "description": "PROSHARES ULTRA FTSE CHINA 50 ETF",
+          "data_delay": 15,
+          "currency": "USD",
+          "time_zone": "America/Chicago",
+          "open_time": "08:00:00",
+          "close_time": "16:00:00",
+          "tick_days": "MonToFri",
+          "tick_frequency": "C",
+          "tick_period": "Regular",
+          "display_override_auto_hide": false,
+          "index_family": null,
+          "index_family_relationship": null,
+          "index_launch_date": null,
+          "show_intraday_chart": true,
+          "tick_interval_seconds": null
+        },
+        {
+          "symbol": "YXIIV",
+          "name": "PROSHARES SHORT FTSE CHINA 50 ETF",
+          "description": "PROSHARES SHORT FTSE CHINA 50 ETF",
+          "data_delay": 15,
+          "currency": "USD",
+          "time_zone": "America/Chicago",
+          "open_time": "08:00:00",
+          "close_time": "16:00:00",
+          "tick_days": "MonToFri",
+          "tick_frequency": "C",
+          "tick_period": "Regular",
+          "display_override_auto_hide": false,
+          "index_family": null,
+          "index_family_relationship": null,
+          "index_launch_date": null,
+          "show_intraday_chart": true,
+          "tick_interval_seconds": null
+        }
+      ],
+      "provider": "cboe",
+      "warnings": null,
+      "chart": null,
+      "extra": {
+        "metadata": {
+          "arguments": {
+            "provider_choices": {
+              "provider": "cboe"
+            },
+            "standard_params": {
+              "query": "China",
+              "is_symbol": false
+            },
+            "extra_params": {
+              "use_cache": true
+            }
+          },
+          "duration": 453659900,
+          "route": "/index/search",
+          "timestamp": "2025-11-18T13:22:40.566557"
+        }
+      }
+    },
+    "sectors": {
+      "results": [
+        {
+          "name": "Consumer Cyclical",
+          "performance_1d": -0.0086,
+          "performance_1w": -0.0475,
+          "performance_1m": -0.0138,
+          "performance_3m": 0.0051,
+          "performance_6m": 0.058499999999999996,
+          "performance_1y": 0.0602,
+          "performance_ytd": 0.037000000000000005,
+          "analyst_recommendation": 1.83,
+          "volume": 1330000000,
+          "volume_average": 1350000000,
+          "volume_relative": 0.99
+        },
+        {
+          "name": "Technology",
+          "performance_1d": -0.0146,
+          "performance_1w": -0.0408,
+          "performance_1m": -0.0158,
+          "performance_3m": 0.07490000000000001,
+          "performance_6m": 0.2054,
+          "performance_1y": 0.20739999999999997,
+          "performance_ytd": 0.203,
+          "analyst_recommendation": 1.65,
+          "volume": 2500000000,
+          "volume_average": 2790000000,
+          "volume_relative": 0.89
+        },
+        {
+          "name": "Industrials",
+          "performance_1d": -0.0139,
+          "performance_1w": -0.0333,
+          "performance_1m": -0.0219,
+          "performance_3m": -0.0042,
+          "performance_6m": 0.0526,
+          "performance_1y": 0.050199999999999995,
+          "performance_ytd": 0.1213,
+          "analyst_recommendation": 1.97,
+          "volume": 971770000,
+          "volume_average": 1120000000,
+          "volume_relative": 0.87
+        },
+        {
+          "name": "Financial",
+          "performance_1d": -0.0197,
+          "performance_1w": -0.0273,
+          "performance_1m": -0.0027,
+          "performance_3m": -0.0005,
+          "performance_6m": 0.0435,
+          "performance_1y": 0.10529999999999999,
+          "performance_ytd": 0.1331,
+          "analyst_recommendation": 2.06,
+          "volume": 1740000000,
+          "volume_average": 1740000000,
+          "volume_relative": 1.0
+        },
+        {
+          "name": "Communication Services",
+          "performance_1d": 0.0079,
+          "performance_1w": -0.0246,
+          "performance_1m": -0.0076,
+          "performance_3m": 0.0645,
+          "performance_6m": 0.20079999999999998,
+          "performance_1y": 0.2589,
+          "performance_ytd": 0.2368,
+          "analyst_recommendation": 1.57,
+          "volume": 673340000,
+          "volume_average": 745730000,
+          "volume_relative": 0.9
+        },
+        {
+          "name": "Basic Materials",
+          "performance_1d": -0.015600000000000001,
+          "performance_1w": -0.0197,
+          "performance_1m": -0.0322,
+          "performance_3m": 0.054900000000000004,
+          "performance_6m": 0.1449,
+          "performance_1y": 0.1282,
+          "performance_ytd": 0.22820000000000001,
+          "analyst_recommendation": 1.99,
+          "volume": 715680000,
+          "volume_average": 849150000,
+          "volume_relative": 0.84
+        },
+        {
+          "name": "Real Estate",
+          "performance_1d": -0.0084,
+          "performance_1w": -0.0158,
+          "performance_1m": -0.0294,
+          "performance_3m": -0.0223,
+          "performance_6m": -0.0207,
+          "performance_1y": -0.0643,
+          "performance_ytd": -0.0091,
+          "analyst_recommendation": 1.91,
+          "volume": 502370000,
+          "volume_average": 613670000,
+          "volume_relative": 0.82
+        },
+        {
+          "name": "Utilities",
+          "performance_1d": 0.0059,
+          "performance_1w": -0.004,
+          "performance_1m": -0.019799999999999998,
+          "performance_3m": 0.0592,
+          "performance_6m": 0.1051,
+          "performance_1y": 0.1699,
+          "performance_ytd": 0.2094,
+          "analyst_recommendation": 2.09,
+          "volume": 206760000,
+          "volume_average": 217620000,
+          "volume_relative": 0.95
+        },
+        {
+          "name": "Energy",
+          "performance_1d": -0.013600000000000001,
+          "performance_1w": -0.001,
+          "performance_1m": 0.0542,
+          "performance_3m": 0.0676,
+          "performance_6m": 0.09119999999999999,
+          "performance_1y": 0.015,
+          "performance_ytd": 0.0761,
+          "analyst_recommendation": 2.03,
+          "volume": 653370000,
+          "volume_average": 728000000,
+          "volume_relative": 0.9
+        },
+        {
+          "name": "Consumer Defensive",
+          "performance_1d": -0.005600000000000001,
+          "performance_1w": 0.0001,
+          "performance_1m": -0.0363,
+          "performance_3m": -0.054900000000000004,
+          "performance_6m": -0.051500000000000004,
+          "performance_1y": 0.0055000000000000005,
+          "performance_ytd": 0.0191,
+          "analyst_recommendation": 1.93,
+          "volume": 521059999,
+          "volume_average": 648610000,
+          "volume_relative": 0.8
+        },
+        {
+          "name": "Healthcare",
+          "performance_1d": 0.0001,
+          "performance_1w": 0.0271,
+          "performance_1m": 0.047400000000000005,
+          "performance_3m": 0.10869999999999999,
+          "performance_6m": 0.1452,
+          "performance_1y": 0.0403,
+          "performance_ytd": 0.1134,
+          "analyst_recommendation": 1.85,
+          "volume": 1910000000,
+          "volume_average": 1590000000,
+          "volume_relative": 1.2
+        }
+      ],
+      "provider": "finviz",
+      "warnings": null,
+      "chart": null,
+      "extra": {
+        "metadata": {
+          "arguments": {
+            "provider_choices": {
+              "provider": "finviz"
+            },
+            "standard_params": {},
+            "extra_params": {
+              "group": "sector",
+              "metric": "performance"
+            }
+          },
+          "duration": 1654394500,
+          "route": "/equity/compare/groups",
+          "timestamp": "2025-11-18T13:22:41.152365"
+        }
+      }
+    },
+    "calendar": {
+      "raw": "Error calling tool 'economy_calendar': HTTP error 400: Bad Request - {'detail': \"Missing credential 'fmp_api_key'. Check https://financialmodelingprep.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}"
+    },
+    "macro": {
+      "raw": "Error calling tool 'economy_indicators': "
+    }
+  },
+  "analysis": {
+    "market_regime": {
+      "market_regime": "趋势市场（基于行业分化）",
+      "indicators": [
+        "基于行业表现数据推断"
+      ],
+      "conclusion": "\n        市场状态判断：\n        1. 基于行业表现数据，当前市场呈现行业分化特征\n        2. 建议：结合具体指数价格走势和技术指标进一步确认\n        3. 如果行业轮动明显，偏向趋势市场；如果行业表现趋同，偏向震荡市场\n        "
+    },
+    "sector_strength": {
+      "strong_sectors": [
+        {
+          "name": "Healthcare",
+          "综合得分": "10.29%",
+          "表现": "1周:2.71% 1月:4.74% 3月:10.87%"
+        },
+        {
+          "name": "Technology",
+          "综合得分": "9.74%",
+          "表现": "1周:-4.08% 1月:-1.58% 3月:7.49%"
+        },
+        {
+          "name": "Communication Services",
+          "综合得分": "9.57%",
+          "表现": "1周:-2.46% 1月:-0.76% 3月:6.45%"
+        }
+      ],
+      "weak_sectors": [
+        {
+          "name": "Industrials",
+          "综合得分": "1.21%",
+          "表现": "1周:-3.33% 1月:-2.19% 3月:-0.42%"
+        },
+        {
+          "name": "Real Estate",
+          "综合得分": "-2.24%",
+          "表现": "1周:-1.58% 1月:-2.94% 3月:-2.23%"
+        },
+        {
+          "name": "Consumer Defensive",
+          "综合得分": "-4.43%",
+          "表现": "1周:0.01% 1月:-3.63% 3月:-5.49%"
+        }
+      ],
+      "hot_themes": [
+        {
+          "name": "Healthcare",
+          "趋势": "持续上涨",
+          "1年表现": "4.03%"
+        }
+      ],
+      "sector_ranking": {
+        "1周": [
+          {
+            "name": "Healthcare",
+            "performance": 2.71
+          },
+          {
+            "name": "Consumer Defensive",
+            "performance": 0.01
+          },
+          {
+            "name": "Energy",
+            "performance": -0.1
+          },
+          {
+            "name": "Utilities",
+            "performance": -0.4
+          },
+          {
+            "name": "Real Estate",
+            "performance": -1.58
+          }
+        ],
+        "1月": [
+          {
+            "name": "Energy",
+            "performance": 5.42
+          },
+          {
+            "name": "Healthcare",
+            "performance": 4.74
+          },
+          {
+            "name": "Financial",
+            "performance": -0.27
+          },
+          {
+            "name": "Communication Services",
+            "performance": -0.76
+          },
+          {
+            "name": "Consumer Cyclical",
+            "performance": -1.38
+          }
+        ],
+        "3月": [
+          {
+            "name": "Healthcare",
+            "performance": 10.87
+          },
+          {
+            "name": "Technology",
+            "performance": 7.490000000000001
+          },
+          {
+            "name": "Energy",
+            "performance": 6.76
+          },
+          {
+            "name": "Communication Services",
+            "performance": 6.45
+          },
+          {
+            "name": "Utilities",
+            "performance": 5.92
+          }
+        ],
+        "6月": [
+          {
+            "name": "Technology",
+            "performance": 20.54
+          },
+          {
+            "name": "Communication Services",
+            "performance": 20.08
+          },
+          {
+            "name": "Healthcare",
+            "performance": 14.52
+          },
+          {
+            "name": "Basic Materials",
+            "performance": 14.49
+          },
+          {
+            "name": "Utilities",
+            "performance": 10.51
+          }
+        ],
+        "1年": [
+          {
+            "name": "Communication Services",
+            "performance": 25.89
+          },
+          {
+            "name": "Technology",
+            "performance": 20.74
+          },
+          {
+            "name": "Utilities",
+            "performance": 16.99
+          },
+          {
+            "name": "Basic Materials",
+            "performance": 12.82
+          },
+          {
+            "name": "Financial",
+            "performance": 10.53
+          }
+        ]
+      },
+      "conclusion": "\n        分析结果：\n        1. 强势行业（前3名）：Healthcare, Technology, Communication Services\n        2. 弱势行业（后3名）：Industrials, Real Estate, Consumer Defensive\n        3. 热点持续性行业：Healthcare\n        4. 行业轮动：已按1周、1月、3月、6月、1年周期排序\n        "
+    },
+    "capital_preference": {
+      "value_preference": 5.409999999999999,
+      "growth_preference": 16.886666666666667,
+      "theme_preference": 6.78,
+      "conclusion": "\n        资金偏好分析：\n        1. 价值股平均表现：5.41%\n           - 代表行业：金融、公用事业、房地产、消费必需品\n        2. 增长股平均表现：16.89%\n           - 代表行业：科技、医疗、通信服务\n        3. 主题股平均表现：6.78%\n           - 代表行业：能源、基础材料、消费周期性\n        \n        结论：当前资金偏好 增长 风格（16.89%）\n        "
+    }
+  }
+}
