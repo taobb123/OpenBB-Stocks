@@ -5,6 +5,7 @@
 
 import asyncio
 import json
+import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from market_structure_analysis import MarketStructureAnalyzer
@@ -30,6 +31,31 @@ class InteractiveMarketAnalyzer:
         """
         self.analyzer = MarketStructureAnalyzer(mcp_url=mcp_url, use_akshare=use_akshare)
         self.akshare = self.analyzer.akshare if use_akshare and AKSHARE_AVAILABLE else None
+    
+    def _generate_report_filename(self, prefix: str = "custom_stock_analysis") -> str:
+        """
+        生成报告文件名（纯数字日期格式：年月日时分，重复时加序号）
+        
+        Args:
+            prefix: 文件名前缀（实际不使用，保持兼容性）
+        
+        Returns:
+            文件名（带序号，如果重复）
+        """
+        # 格式：YYYYMMDDHHmm（年月日时分）
+        timestamp = datetime.now().strftime("%Y%m%d%H%M")
+        base_filename = f"{timestamp}.txt"
+        
+        # 检查文件是否存在，如果存在则加序号
+        if os.path.exists(base_filename):
+            counter = 1
+            while True:
+                filename = f"{timestamp}_{counter}.txt"
+                if not os.path.exists(filename):
+                    return filename
+                counter += 1
+        else:
+            return base_filename
     
     def get_stock_timing_analysis(self, symbol: str) -> Dict[str, Any]:
         """
@@ -438,15 +464,14 @@ class InteractiveMarketAnalyzer:
         report = self.format_custom_analysis_report(analysis)
         print("\n" + report)
         
-        # 保存报告
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"custom_stock_analysis_{timestamp}.txt"
+        # 保存报告（纯数字日期格式，重复时加序号）
+        filename = self._generate_report_filename("custom_stock_analysis")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(report)
         print(f"\n✅ 报告已保存到: {filename}")
         
-        # 保存 JSON 数据
-        json_filename = f"custom_stock_analysis_{timestamp}.json"
+        # 保存 JSON 数据（使用相同的文件名，但扩展名为.json）
+        json_filename = filename.replace(".txt", ".json")
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(analysis, f, ensure_ascii=False, indent=2)
         print(f"✅ 数据已保存到: {json_filename}")

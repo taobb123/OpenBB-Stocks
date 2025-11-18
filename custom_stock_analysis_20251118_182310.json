@@ -1,0 +1,674 @@
+{
+  "timestamp": "2025-11-18T18:16:43.354691",
+  "market_type": "A股",
+  "stocks": [
+    {
+      "symbol": "600588",
+      "timing": {
+        "symbol": "600588",
+        "current_price": 14.96,
+        "indicators": {
+          "MA": {
+            "MA5": 14.522000000000002,
+            "MA20": 14.828,
+            "MA60": 15.223,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 49.595687331536396,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 20.0,
+            "low_52w": 9.71,
+            "current": 14.96,
+            "position_percent": 51.02040816326531,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 828487.0,
+            "avg_20d": 587107.75,
+            "ratio": 1.4111327946190457,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600588",
+        "info": {
+          "最新": 14.96,
+          "股票代码": "600588",
+          "股票简称": "用友网络",
+          "总股本": 3416997409.0,
+          "流通股": 3416997409.0,
+          "总市值": 51118281238.64,
+          "流通市值": 51118281238.64,
+          "行业": "软件开发",
+          "上市时间": 20010518
+        },
+        "fundamentals": {
+          "营业收入": 128739615.0,
+          "净利润": 21846931.0,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 14.96,
+          "high_52w": 20.0,
+          "low_52w": 9.71
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 600588.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "600570",
+      "timing": {
+        "symbol": "600570",
+        "current_price": 29.8,
+        "indicators": {
+          "MA": {
+            "MA5": 29.228,
+            "MA20": 30.633499999999998,
+            "MA60": 33.463833333333326,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 29.525222551928763,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 39.04,
+            "low_52w": 24.15,
+            "current": 29.8,
+            "position_percent": 37.94492948287442,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 494403.0,
+            "avg_20d": 282164.05,
+            "ratio": 1.752182817052704,
+            "signal": "放量"
+          }
+        },
+        "timing": {
+          "score": 3,
+          "recommendation": "买入",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹",
+            "✅ 成交量放大，资金关注"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600570",
+        "info": {
+          "最新": 29.8,
+          "股票代码": "600570",
+          "股票简称": "恒生电子",
+          "总股本": 1894130907.0,
+          "流通股": 1894130907.0,
+          "总市值": 56445101028.6,
+          "流通市值": 56445101028.6,
+          "行业": "软件开发",
+          "上市时间": 20031216
+        },
+        "fundamentals": {
+          "营业收入": 346307385.91,
+          "净利润": 23026023.76,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 29.8,
+          "high_52w": 39.04,
+          "low_52w": 24.15
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 600570.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "002410",
+      "timing": {
+        "symbol": "002410",
+        "current_price": 13.68,
+        "indicators": {
+          "MA": {
+            "MA5": 13.776,
+            "MA20": 14.160999999999998,
+            "MA60": 14.139666666666669,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 31.746031746031747,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 15.66,
+            "low_52w": 10.22,
+            "current": 13.68,
+            "position_percent": 63.60294117647057,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 290665.0,
+            "avg_20d": 334631.3,
+            "ratio": 0.8686127089725318,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002410",
+        "info": {
+          "最新": 13.68,
+          "股票代码": "002410",
+          "股票简称": "广联达",
+          "总股本": 1651944342.0,
+          "流通股": 1588081079.0,
+          "总市值": 22598598598.56,
+          "流通市值": 21724949160.72,
+          "行业": "软件开发",
+          "上市时间": 20100525
+        },
+        "fundamentals": {
+          "营业收入": 175547435.72,
+          "净利润": 57397222.36,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 13.68,
+          "high_52w": 15.66,
+          "low_52w": 10.22
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002410.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "603019",
+      "timing": {
+        "symbol": "603019",
+        "current_price": 100.43,
+        "indicators": {
+          "MA": {
+            "MA5": 102.41399999999999,
+            "MA20": 108.1,
+            "MA60": 102.64450000000001,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 29.266109785202843,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 125.5,
+            "low_52w": 59.13,
+            "current": 100.43,
+            "position_percent": 62.2269097483803,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 317047.0,
+            "avg_20d": 432356.0,
+            "ratio": 0.7333007984161201,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "603019",
+        "info": {
+          "最新": 100.43,
+          "股票代码": "603019",
+          "股票简称": "中科曙光",
+          "总股本": 1463115784.0,
+          "流通股": 1462706864.0,
+          "总市值": 146940718187.12,
+          "流通市值": 146899650351.52002,
+          "行业": "计算机设备",
+          "上市时间": 20141106
+        },
+        "fundamentals": {
+          "营业收入": 1422962874.68,
+          "净利润": 114813833.03,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 100.43,
+          "high_52w": 125.5,
+          "low_52w": 59.13
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 603019.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "300166",
+      "timing": {
+        "symbol": "300166",
+        "current_price": 11.49,
+        "indicators": {
+          "MA": {
+            "MA5": 10.598,
+            "MA20": 10.400000000000002,
+            "MA60": 10.963,
+            "trend": "上升"
+          },
+          "RSI": {
+            "value": 70.66246056782333,
+            "signal": "超买"
+          },
+          "PricePosition": {
+            "high_52w": 13.54,
+            "low_52w": 8.16,
+            "current": 11.49,
+            "position_percent": 61.89591078066916,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 1138938.0,
+            "avg_20d": 315570.5,
+            "ratio": 3.609139637577023,
+            "signal": "放量"
+          }
+        },
+        "timing": {
+          "score": 1,
+          "recommendation": "观望",
+          "factors": [
+            "✅ 均线呈上升趋势",
+            "⚠️ RSI显示超买，注意风险",
+            "✅ 成交量放大，资金关注"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "300166",
+        "info": {
+          "最新": 11.49,
+          "股票代码": "300166",
+          "股票简称": "东方国信",
+          "总股本": 1138745748.0,
+          "流通股": 905777562.0,
+          "总市值": 13084188644.52,
+          "流通市值": 10407384187.380001,
+          "行业": "互联网服务",
+          "上市时间": 20110125
+        },
+        "fundamentals": {
+          "营业收入": 31403283.2,
+          "净利润": 4347818.3,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 11.49,
+          "high_52w": 13.54,
+          "low_52w": 8.16
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 300166.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "000977",
+      "timing": {
+        "symbol": "000977",
+        "current_price": 60.7,
+        "indicators": {
+          "MA": {
+            "MA5": 60.122,
+            "MA20": 63.967000000000006,
+            "MA60": 65.57716666666666,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 21.03746397694526,
+            "signal": "超卖"
+          },
+          "PricePosition": {
+            "high_52w": 76.05,
+            "low_52w": 44.52,
+            "current": 60.7,
+            "position_percent": 51.316206787186815,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 394313.0,
+            "avg_20d": 491341.6,
+            "ratio": 0.8025231325823012,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ RSI显示超卖，可能反弹"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "000977",
+        "info": {
+          "最新": 60.7,
+          "股票代码": "000977",
+          "股票简称": "浪潮信息",
+          "总股本": 1472135122.0,
+          "流通股": 1470490271.0,
+          "总市值": 89358601905.40001,
+          "流通市值": 89258759449.7,
+          "行业": "计算机设备",
+          "上市时间": 20000608
+        },
+        "fundamentals": {
+          "营业收入": 600506935.41,
+          "净利润": 65704906.45,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 60.7,
+          "high_52w": 76.05,
+          "low_52w": 44.52
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 000977.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "688111",
+      "timing": {
+        "symbol": "688111",
+        "current_price": 318.67,
+        "indicators": {
+          "MA": {
+            "MA5": 316.49800000000005,
+            "MA20": 327.71799999999996,
+            "MA60": 316.013,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 39.10505836575877,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 397.18,
+            "low_52w": 254.1,
+            "current": 318.67,
+            "position_percent": 45.12859938495947,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 85406.0,
+            "avg_20d": 89653.5,
+            "ratio": 0.952623154701155,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "688111",
+        "info": {
+          "最新": 318.67,
+          "股票代码": "688111",
+          "股票简称": "金山办公",
+          "总股本": 463179293.0,
+          "流通股": 463179293.0,
+          "总市值": 147601345300.31,
+          "流通市值": 147601345300.31,
+          "行业": "软件开发",
+          "上市时间": 20191118
+        },
+        "fundamentals": {
+          "营业收入": 282968500.0,
+          "净利润": 13634600.0,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 318.67,
+          "high_52w": 397.18,
+          "low_52w": 254.1
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 688111.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "300454",
+      "timing": {
+        "symbol": "300454",
+        "current_price": 120.17,
+        "indicators": {
+          "MA": {
+            "MA5": 119.36599999999999,
+            "MA20": 118.92249999999999,
+            "MA60": 117.391,
+            "trend": "上升"
+          },
+          "RSI": {
+            "value": 55.02567865003669,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 133.99,
+            "low_52w": 52.47,
+            "current": 120.17,
+            "position_percent": 83.04710500490677,
+            "signal": "高位"
+          },
+          "Volume": {
+            "current": 78758.0,
+            "avg_20d": 93478.0,
+            "ratio": 0.8425297931063994,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 1,
+          "recommendation": "观望",
+          "factors": [
+            "✅ 均线呈上升趋势",
+            "⚠️ 价格处于52周高位"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "300454",
+        "info": {
+          "最新": 120.17,
+          "股票代码": "300454",
+          "股票简称": "深信服",
+          "总股本": 421883707.0,
+          "流通股": 278295190.0,
+          "总市值": 50697765070.19,
+          "流通市值": 33442732982.3,
+          "行业": "软件开发",
+          "上市时间": 20180516
+        },
+        "fundamentals": {
+          "营业收入": 949591478.33,
+          "净利润": 232849698.07,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 120.17,
+          "high_52w": 133.99,
+          "low_52w": 52.47
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 300454.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "600845",
+      "timing": {
+        "symbol": "600845",
+        "current_price": 23.0,
+        "indicators": {
+          "MA": {
+            "MA5": 22.848000000000003,
+            "MA20": 22.897000000000002,
+            "MA60": 23.621833333333328,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 57.4358974358974,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 36.77,
+            "low_52w": 22.66,
+            "current": 23.0,
+            "position_percent": 2.409638554216866,
+            "signal": "低位"
+          },
+          "Volume": {
+            "current": 122911.0,
+            "avg_20d": 111895.15,
+            "ratio": 1.0984479666902454,
+            "signal": "正常"
+          }
+        },
+        "timing": {
+          "score": 2,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势",
+            "✅ 价格处于52周低位"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "600845",
+        "info": {
+          "最新": 23.0,
+          "股票代码": "600845",
+          "股票简称": "宝信软件",
+          "总股本": 2870778802.0,
+          "流通股": 2133740521.0,
+          "总市值": 66027912446.0,
+          "流通市值": 49076031983.0,
+          "行业": "互联网服务",
+          "上市时间": 19940311
+        },
+        "fundamentals": {
+          "营业收入": 418410000.0,
+          "净利润": 36083000.0,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 23.0,
+          "high_52w": 36.77,
+          "low_52w": 22.66
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 600845.SS -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    },
+    {
+      "symbol": "002268",
+      "timing": {
+        "symbol": "002268",
+        "current_price": 17.45,
+        "indicators": {
+          "MA": {
+            "MA5": 17.356,
+            "MA20": 17.686999999999998,
+            "MA60": 17.81883333333333,
+            "trend": "下降"
+          },
+          "RSI": {
+            "value": 40.84507042253517,
+            "signal": "正常"
+          },
+          "PricePosition": {
+            "high_52w": 19.46,
+            "low_52w": 14.34,
+            "current": 17.45,
+            "position_percent": 60.74218749999998,
+            "signal": "中位"
+          },
+          "Volume": {
+            "current": 70874.0,
+            "avg_20d": 113907.4,
+            "ratio": 0.6222071612555462,
+            "signal": "缩量"
+          }
+        },
+        "timing": {
+          "score": 0,
+          "recommendation": "观望",
+          "factors": [
+            "⚠️ 均线呈下降趋势"
+          ]
+        }
+      },
+      "fundamentals": {
+        "symbol": "002268",
+        "info": {
+          "最新": 17.45,
+          "股票代码": "002268",
+          "股票简称": "电科网安",
+          "总股本": 845636083.0,
+          "流通股": 845297908.0,
+          "总市值": 14756349648.349998,
+          "流通市值": 14750448494.599998,
+          "行业": "软件开发",
+          "上市时间": 20080811
+        },
+        "fundamentals": {
+          "营业收入": 114555080.32,
+          "净利润": 20244051.6,
+          "每股收益": null
+        },
+        "price_data": {
+          "current": 17.45,
+          "high_52w": 19.46,
+          "low_52w": 14.34
+        }
+      },
+      "profile": {
+        "raw": "Error calling tool 'equity_profile': HTTP error 400: Bad Request - {'detail': 'Error getting data for 002268.SZ -> YFRateLimitError: Too Many Requests. Rate limited. Try after a while.'}"
+      }
+    }
+  ]
+}

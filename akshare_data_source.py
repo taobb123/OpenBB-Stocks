@@ -250,7 +250,7 @@ class AKShareDataSource:
             # 方法1：使用最稳定的财务分析指标接口（推荐，不走push2）
             try:
                 print(f"  使用 stock_financial_analysis_indicator 获取 {symbol} 基本面数据...")
-                df = ak.stock_financial_analysis_indicator(stock=symbol)
+                df = ak.stock_financial_analysis_indicator(symbol=symbol)
                 
                 if not df.empty:
                     # 获取最新一期数据（通常是最后一行）
@@ -292,46 +292,36 @@ class AKShareDataSource:
                 print(f"  ⚠️ stock_financial_analysis_indicator 失败: {e}")
             
             # 方法2：获取实时行情（使用新浪接口，不走push2）
+            spot_fetched = False
             try:
                 print(f"  使用 stock_zh_a_spot 获取 {symbol} 实时行情...")
                 spot_data = ak.stock_zh_a_spot()
                 
-                if not spot_data.empty:
-                    # 查找股票（代码列可能是"代码"或"symbol"）
-                    code_col = None
-                    for col in ["代码", "symbol", "股票代码"]:
-                        if col in spot_data.columns:
-                            code_col = col
-                            break
-                    
-                    if code_col:
-                        stock_row = spot_data[spot_data[code_col] == symbol]
-                        if not stock_row.empty:
-                            row = stock_row.iloc[0]
-                            
-                            # 提取实时数据
-                            price_cols = {
-                                "最新价": ["最新价", "现价", "price", "current"],
-                                "涨跌幅": ["涨跌幅", "涨跌%", "change_pct", "pctChg"],
-                                "成交量": ["成交量", "volume", "vol"],
-                                "换手率": ["换手率", "turnover", "turnoverRate"],
-                                "市盈率": ["市盈率", "PE", "pe"],
-                                "市净率": ["市净率", "PB", "pb"],
-                                "总市值": ["总市值", "market_cap", "mktcap"],
-                                "流通市值": ["流通市值", "circulating_market_cap"]
-                            }
-                            
-                            for key, possible_names in price_cols.items():
-                                for name in possible_names:
-                                    if name in row.index:
-                                        value = row.get(name)
-                                        if pd.notna(value):
-                                            fundamentals[key] = value
-                                            break
-                            
-                            print(f"  ✅ 通过 stock_zh_a_spot 获取到实时行情")
+                spot_fetched = self._extract_realtime_from_spot_df(
+                    df=spot_data,
+                    symbol=symbol,
+                    fundamentals=fundamentals
+                )
+                if spot_fetched:
+                    print(f"  ✅ 通过 stock_zh_a_spot 获取到实时行情")
             except Exception as e:
                 print(f"  ⚠️ stock_zh_a_spot 失败: {e}")
+            
+            # 如果新浪接口失败，尝试备用接口（可能走 push2，但作为兜底）
+            if not spot_fetched:
+                try:
+                    print(f"  使用 stock_zh_a_spot_em 兜底获取 {symbol} 实时行情...")
+                    spot_data = ak.stock_zh_a_spot_em()
+                    
+                    spot_fetched = self._extract_realtime_from_spot_df(
+                        df=spot_data,
+                        symbol=symbol,
+                        fundamentals=fundamentals
+                    )
+                    if spot_fetched:
+                        print(f"  ✅ 通过 stock_zh_a_spot_em 获取到实时行情")
+                except Exception as e:
+                    print(f"  ⚠️ stock_zh_a_spot_em 也失败: {e}")
             
             # 方法3：获取财务报表摘要（如果前两个都失败）
             if not fundamentals:
@@ -352,6 +342,62 @@ class AKShareDataSource:
         except Exception as e:
             print(f"⚠️ 获取 {symbol} 基本面数据失败: {e}")
             return {}
+
+    def _extract_realtime_from_spot_df(
+        self,
+        df: Optional[pd.DataFrame],
+        symbol: str,
+        fundamentals: Dict[str, Any]
+    ) -> bool:
+        """
+        从实时行情 DataFrame 中提取指定股票的数据
+        """
+        if df is None or df.empty:
+            return False
+        
+        # 查找可能的代码列
+        code_col = None
+        for col in ["代码", "symbol", "股票代码", "证券代码"]:
+            if col in df.columns:
+                code_col = col
+                break
+        
+        if not code_col:
+            return False
+        
+        stock_row = df[df[code_col] == symbol]
+        if stock_row.empty and symbol.startswith(("6", "0", "3")):
+            # 有些接口会自动带上交易所后缀，尝试补齐
+            alt_symbol = f"{symbol}.SH" if symbol.startswith("6") else f"{symbol}.SZ"
+            stock_row = df[df[code_col] == alt_symbol]
+        
+        if stock_row.empty:
+            return False
+        
+        row = stock_row.iloc[0]
+        
+        price_cols = {
+            "最新价": ["最新价", "现价", "price", "current", "最新价(元)"],
+            "涨跌幅": ["涨跌幅", "涨跌%", "change_pct", "pctChg"],
+            "成交量": ["成交量", "volume", "vol"],
+            "换手率": ["换手率", "turnover", "turnoverRate"],
+            "市盈率": ["市盈率", "PE", "pe"],
+            "市净率": ["市净率", "PB", "pb"],
+            "总市值": ["总市值", "market_cap", "mktcap"],
+            "流通市值": ["流通市值", "circulating_market_cap"]
+        }
+        
+        updated = False
+        for key, possible_names in price_cols.items():
+            for name in possible_names:
+                if name in row.index:
+                    value = row.get(name)
+                    if pd.notna(value):
+                        fundamentals[key] = value
+                        updated = True
+                        break
+        
+        return updated
     
     def screen_stocks(
         self,

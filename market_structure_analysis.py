@@ -10,6 +10,8 @@
 
 import json
 import httpx
+import os
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import pandas as pd
@@ -53,6 +55,31 @@ class MarketStructureAnalyzer:
             except Exception as e:
                 print(f"⚠️ 初始化 AKShare 失败: {e}，将使用 yfinance")
                 self.use_akshare = False
+    
+    def _generate_report_filename(self, prefix: str = "investment_report") -> str:
+        """
+        生成报告文件名（纯数字日期格式：年月日时分，重复时加序号）
+        
+        Args:
+            prefix: 文件名前缀（实际不使用，保持兼容性）
+        
+        Returns:
+            文件名（带序号，如果重复）
+        """
+        # 格式：YYYYMMDDHHmm（年月日时分）
+        timestamp = datetime.now().strftime("%Y%m%d%H%M")
+        base_filename = f"{timestamp}.txt"
+        
+        # 检查文件是否存在，如果存在则加序号
+        if os.path.exists(base_filename):
+            counter = 1
+            while True:
+                filename = f"{timestamp}_{counter}.txt"
+                if not os.path.exists(filename):
+                    return filename
+                counter += 1
+        else:
+            return base_filename
     
     async def _initialize_session(self) -> bool:
         """
@@ -1571,8 +1598,8 @@ class MarketStructureAnalyzer:
         
         report = self.generate_investment_report(full_analysis)
         
-        # 保存报告到文件
-        report_filename = f"investment_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        # 保存报告到文件（纯数字日期格式，重复时加序号）
+        report_filename = self._generate_report_filename("investment_report")
         with open(report_filename, "w", encoding="utf-8") as f:
             f.write(report)
         
@@ -2542,8 +2569,8 @@ class MarketStructureAnalyzer:
         report = self.generate_investment_report(full_analysis)
         result["workflow_steps"]["step6_report"] = report
         
-        # 保存报告到文件
-        report_filename = f"investment_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        # 保存报告到文件（纯数字日期格式，重复时加序号）
+        report_filename = self._generate_report_filename("investment_report")
         with open(report_filename, "w", encoding="utf-8") as f:
             f.write(report)
         
