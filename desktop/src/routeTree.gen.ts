@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UninstallRouteImport } from './routes/uninstall'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as MarketAnalysisRestRouteImport } from './routes/market-analysis-rest'
+import { Route as MarketAnalysisRouteImport } from './routes/market-analysis'
 import { Route as JupyterLogsRouteImport } from './routes/jupyter-logs'
 import { Route as InstallationProgressRouteImport } from './routes/installation-progress'
 import { Route as EnvironmentsRouteImport } from './routes/environments'
@@ -27,6 +29,16 @@ const UninstallRoute = UninstallRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketAnalysisRestRoute = MarketAnalysisRestRouteImport.update({
+  id: '/market-analysis-rest',
+  path: '/market-analysis-rest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketAnalysisRoute = MarketAnalysisRouteImport.update({
+  id: '/market-analysis',
+  path: '/market-analysis',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JupyterLogsRoute = JupyterLogsRouteImport.update({
@@ -73,6 +85,8 @@ export interface FileRoutesByFullPath {
   '/environments': typeof EnvironmentsRoute
   '/installation-progress': typeof InstallationProgressRoute
   '/jupyter-logs': typeof JupyterLogsRoute
+  '/market-analysis': typeof MarketAnalysisRoute
+  '/market-analysis-rest': typeof MarketAnalysisRestRoute
   '/setup': typeof SetupRoute
   '/uninstall': typeof UninstallRoute
 }
@@ -84,6 +98,8 @@ export interface FileRoutesByTo {
   '/environments': typeof EnvironmentsRoute
   '/installation-progress': typeof InstallationProgressRoute
   '/jupyter-logs': typeof JupyterLogsRoute
+  '/market-analysis': typeof MarketAnalysisRoute
+  '/market-analysis-rest': typeof MarketAnalysisRestRoute
   '/setup': typeof SetupRoute
   '/uninstall': typeof UninstallRoute
 }
@@ -96,6 +112,8 @@ export interface FileRoutesById {
   '/environments': typeof EnvironmentsRoute
   '/installation-progress': typeof InstallationProgressRoute
   '/jupyter-logs': typeof JupyterLogsRoute
+  '/market-analysis': typeof MarketAnalysisRoute
+  '/market-analysis-rest': typeof MarketAnalysisRestRoute
   '/setup': typeof SetupRoute
   '/uninstall': typeof UninstallRoute
 }
@@ -109,6 +127,8 @@ export interface FileRouteTypes {
     | '/environments'
     | '/installation-progress'
     | '/jupyter-logs'
+    | '/market-analysis'
+    | '/market-analysis-rest'
     | '/setup'
     | '/uninstall'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +140,8 @@ export interface FileRouteTypes {
     | '/environments'
     | '/installation-progress'
     | '/jupyter-logs'
+    | '/market-analysis'
+    | '/market-analysis-rest'
     | '/setup'
     | '/uninstall'
   id:
@@ -131,6 +153,8 @@ export interface FileRouteTypes {
     | '/environments'
     | '/installation-progress'
     | '/jupyter-logs'
+    | '/market-analysis'
+    | '/market-analysis-rest'
     | '/setup'
     | '/uninstall'
   fileRoutesById: FileRoutesById
@@ -143,6 +167,8 @@ export interface RootRouteChildren {
   EnvironmentsRoute: typeof EnvironmentsRoute
   InstallationProgressRoute: typeof InstallationProgressRoute
   JupyterLogsRoute: typeof JupyterLogsRoute
+  MarketAnalysisRoute: typeof MarketAnalysisRoute
+  MarketAnalysisRestRoute: typeof MarketAnalysisRestRoute
   SetupRoute: typeof SetupRoute
   UninstallRoute: typeof UninstallRoute
 }
@@ -161,6 +187,20 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market-analysis-rest': {
+      id: '/market-analysis-rest'
+      path: '/market-analysis-rest'
+      fullPath: '/market-analysis-rest'
+      preLoaderRoute: typeof MarketAnalysisRestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market-analysis': {
+      id: '/market-analysis'
+      path: '/market-analysis'
+      fullPath: '/market-analysis'
+      preLoaderRoute: typeof MarketAnalysisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/jupyter-logs': {
@@ -223,6 +263,8 @@ const rootRouteChildren: RootRouteChildren = {
   EnvironmentsRoute: EnvironmentsRoute,
   InstallationProgressRoute: InstallationProgressRoute,
   JupyterLogsRoute: JupyterLogsRoute,
+  MarketAnalysisRoute: MarketAnalysisRoute,
+  MarketAnalysisRestRoute: MarketAnalysisRestRoute,
   SetupRoute: SetupRoute,
   UninstallRoute: UninstallRoute,
 }

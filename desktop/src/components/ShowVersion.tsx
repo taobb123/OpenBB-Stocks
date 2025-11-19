@@ -1,15 +1,24 @@
 import { useState, useEffect } from "react";
-import { getVersion } from "@tauri-apps/api/app";
 
 let cachedVersion: string | null = null;
 
 const safeGetVersion = async (): Promise<string> => {
   if (cachedVersion !== null) return cachedVersion;
+  
   try {
+    // 检查是否在 Tauri 环境中
+    if (typeof window === "undefined") {
+      cachedVersion = "";
+      return "";
+    }
+    
+    // 动态导入以避免在导入时访问 invoke
+    const { getVersion } = await import("@tauri-apps/api/app");
     cachedVersion = await getVersion();
     return cachedVersion;
   } catch (error) {
-    console.error("Failed to get version:", error);
+    // 静默处理错误，不显示版本号
+    // 不输出错误日志，避免控制台噪音
     cachedVersion = "";
     return "";
   }

@@ -1,0 +1,8 @@
+Django>=4.2.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.0.0
+httpx>=0.24.0
+pandas>=2.0.0
+# 可选依赖（如果使用 akshare）
+# akshare>=1.0.0
+

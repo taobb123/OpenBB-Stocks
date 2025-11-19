@@ -35,6 +35,10 @@ use crate::tauri_handlers::jupyter::{
     stop_all_jupyter_servers, stop_jupyter_server, update_jupyter_status,
 };
 
+use crate::tauri_handlers::market_analysis::{
+    analyze_custom_stocks, extract_stock_codes, run_full_market_analysis,
+};
+
 use crate::tauri_handlers::credentials::{
     get_user_credentials, open_credentials_file, update_user_credentials,
 };
@@ -538,7 +542,10 @@ fn main() {
             uninstall_application,
             quit_application,
             generate_self_signed_cert,
-            update_openbb_settings
+            update_openbb_settings,
+            extract_stock_codes,
+            analyze_custom_stocks,
+            run_full_market_analysis
         ])
         .setup(|app_handle| {
             let install_state = check_installation_on_startup();
