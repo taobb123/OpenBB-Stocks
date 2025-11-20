@@ -50,27 +50,30 @@ function MarketAnalysisRest() {
 	};
 
 	// 检查 API 是否可用
-	useEffect(() => {
-		const checkApi = async () => {
-			try {
-				// 使用健康检查端点（GET 请求，不需要 body）
-				const baseUrl = getApiBaseUrlWithoutPath();
-				const response = await fetch(`${baseUrl}/api/`, {
-					method: "GET",
-					headers: { "Content-Type": "application/json" },
-				});
-				
-				if (response.ok) {
-					setApiReady(true);
-					setError(null);
-				} else {
-					throw new Error(`API returned ${response.status}`);
-				}
-			} catch (err) {
-				setError(`无法连接到后端 API，请确保 Django 服务器正在运行 (${getApiBaseUrlWithoutPath()})`);
-				setApiReady(false);
+	const checkApi = async () => {
+		try {
+			// 使用健康检查端点（GET 请求，不需要 body）
+			const baseUrl = getApiBaseUrlWithoutPath();
+			const response = await fetch(`${baseUrl}/api/`, {
+				method: "GET",
+				headers: { "Content-Type": "application/json" },
+			});
+			
+			if (response.ok) {
+				setApiReady(true);
+				setError(null);
+				return true;
+			} else {
+				throw new Error(`API returned ${response.status}`);
 			}
-		};
+		} catch (err) {
+			setError(`无法连接到后端 API，请确保 Django 服务器正在运行 (${getApiBaseUrlWithoutPath()})`);
+			setApiReady(false);
+			return false;
+		}
+	};
+
+	useEffect(() => {
 		checkApi();
 	}, []);
 
@@ -225,37 +228,130 @@ function MarketAnalysisRest() {
 			{mode === "file" && (
 				<div className="space-y-4">
 					<div className="bg-white rounded-lg shadow p-6">
-						<div className="flex justify-between items-center mb-4">
-							<h2 className="text-xl font-semibold text-black">从文件读取股票代码</h2>
-							<Button 
-								onClick={() => setMode(null)} 
-								variant="outline"
-								className="text-black border-gray-300 hover:bg-gray-50"
-								style={{ 
-									color: '#000000',
-									borderColor: '#d1d5db'
-								}}
-							>
-								返回
-							</Button>
+						<div className="flex justify-between items-center mb-4 gap-4">
+							<h2 className="text-xl font-semibold text-black flex-shrink-0">从文件读取股票代码</h2>
+							<div className="flex gap-2 flex-shrink-0">
+								<Button 
+									onClick={handleFileMode}
+									disabled={loading || !fileContent.trim() || !apiReady}
+									className="text-white font-medium whitespace-nowrap"
+									title={
+										!apiReady 
+											? "API 未连接，请确保后端服务器正在运行。点击下方'重新检查'按钮重试。" 
+											: !fileContent.trim() 
+												? "请输入股票代码内容" 
+												: ""
+									}
+									style={{ 
+										color: '#ffffff',
+										backgroundColor: loading || !fileContent.trim() || !apiReady ? '#9ca3af' : '#3b82f6',
+										cursor: loading || !fileContent.trim() || !apiReady ? 'not-allowed' : 'pointer',
+										opacity: loading || !fileContent.trim() || !apiReady ? 0.6 : 1,
+										minWidth: '100px',
+										paddingLeft: '16px',
+										paddingRight: '16px'
+									}}
+								>
+									{loading 
+										? "分析中..." 
+										: !apiReady 
+											? "API未连接" 
+											: !fileContent.trim()
+												? "请输入内容"
+												: "开始分析"}
+								</Button>
+								<Button 
+									onClick={() => setMode(null)} 
+									variant="outline"
+									className="text-black border-gray-300 hover:bg-gray-50 whitespace-nowrap"
+									style={{ 
+										color: '#000000',
+										borderColor: '#d1d5db',
+										minWidth: '70px',
+										paddingLeft: '16px',
+										paddingRight: '16px'
+									}}
+								>
+									返回
+								</Button>
+							</div>
 						</div>
 
 						<div className="space-y-4">
+							{/* API 状态提示 */}
+							{!apiReady && (
+								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+									<div className="flex justify-between items-start gap-3">
+										<div className="flex-1 min-w-0">
+											<p className="text-sm text-yellow-800 font-medium mb-2">
+												⚠️ API 未连接，文件分析功能暂时不可用
+											</p>
+											<ul className="text-xs text-yellow-700 ml-4 list-disc space-y-1">
+												<li>Django 后端服务器正在运行</li>
+												<li>API 地址配置正确（当前: {getApiBaseUrlWithoutPath()}）</li>
+												<li>检查浏览器控制台查看详细错误信息</li>
+											</ul>
+										</div>
+										<Button
+											onClick={async () => {
+												const success = await checkApi();
+												if (success) {
+													setError(null);
+												}
+											}}
+											variant="outline"
+											className="text-xs whitespace-nowrap flex-shrink-0"
+											style={{
+												color: '#000000',
+												borderColor: '#d1d5db',
+												padding: '6px 14px',
+												minWidth: '80px'
+											}}
+										>
+											重新检查
+										</Button>
+									</div>
+								</div>
+							)}
+							
 							<div>
-								<label className="block text-sm font-medium mb-2 text-black">
-									粘贴股票代码内容（支持任意格式，系统会自动提取6位数字代码）：
-								</label>
+								<div className="flex justify-between items-center mb-2">
+									<label className="block text-sm font-medium text-black leading-relaxed">
+										粘贴股票代码内容（支持任意格式，系统会自动提取6位数字代码）：
+									</label>
+									{fileContent.trim() && (
+										<Button
+											onClick={() => {
+												setFileContent("");
+												setExtractedCodes([]);
+											}}
+											variant="outline"
+											className="text-xs whitespace-nowrap flex-shrink-0"
+											style={{
+												color: '#000000',
+												borderColor: '#d1d5db',
+												padding: '4px 12px',
+												minWidth: '60px'
+											}}
+										>
+											清空
+										</Button>
+									)}
+								</div>
 								<textarea
 									value={fileContent}
 									onChange={(e) => setFileContent(e.target.value)}
-									className="w-full h-48 p-3 border-2 border-gray-300 rounded-lg bg-white text-base font-normal focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
+									className="w-full h-32 p-3 border-2 border-gray-300 rounded-lg bg-white text-base font-normal focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all resize-y"
 									style={{ 
 										color: '#000000',
 										caretColor: '#3b82f6',
 										backgroundColor: '#ffffff',
-										lineHeight: '1.5'
+										lineHeight: '1.5',
+										minHeight: '80px',
+										maxHeight: '200px'
 									}}
 									placeholder="例如：立讯精密（002475）、歌尔股份（002241）..."
+									disabled={!apiReady}
 								/>
 							</div>
 
@@ -276,18 +372,6 @@ function MarketAnalysisRest() {
 									</div>
 								</div>
 							)}
-
-							<Button
-								onClick={handleFileMode}
-								disabled={loading || !fileContent.trim() || !apiReady}
-								className="w-full text-white font-medium"
-								style={{ 
-									color: '#ffffff',
-									backgroundColor: loading || !fileContent.trim() || !apiReady ? '#9ca3af' : '#3b82f6'
-								}}
-							>
-								{loading ? "分析中..." : "开始分析"}
-							</Button>
 						</div>
 					</div>
 				</div>

@@ -162,20 +162,47 @@ function MarketAnalysis() {
 					<div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
 						<div className="flex justify-between items-center mb-4">
 							<h2 className="text-xl font-semibold">从文件读取股票代码</h2>
-							<Button onClick={() => setMode(null)} variant="outline">
-								返回
-							</Button>
+							<div className="flex gap-2">
+								<Button
+									onClick={handleFileMode}
+									disabled={loading || !fileContent.trim()}
+									className=""
+								>
+									{loading ? "分析中..." : "开始分析"}
+								</Button>
+								<Button onClick={() => setMode(null)} variant="outline">
+									返回
+								</Button>
+							</div>
 						</div>
 
 						<div className="space-y-4">
 							<div>
-								<label className="block text-sm font-medium mb-2">
-									粘贴股票代码内容（支持任意格式，系统会自动提取6位数字代码）：
-								</label>
+								<div className="flex justify-between items-center mb-2">
+									<label className="block text-sm font-medium">
+										粘贴股票代码内容（支持任意格式，系统会自动提取6位数字代码）：
+									</label>
+									{fileContent.trim() && (
+										<Button
+											onClick={() => {
+												setFileContent("");
+												setExtractedCodes([]);
+											}}
+											variant="outline"
+											className="text-xs whitespace-nowrap flex-shrink-0"
+										>
+											清空
+										</Button>
+									)}
+								</div>
 								<textarea
 									value={fileContent}
 									onChange={(e) => setFileContent(e.target.value)}
-									className="w-full h-48 p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+									className="w-full h-32 p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-y"
+									style={{
+										minHeight: '80px',
+										maxHeight: '200px'
+									}}
 									placeholder="例如：立讯精密（002475）、歌尔股份（002241）..."
 								/>
 							</div>
@@ -197,14 +224,6 @@ function MarketAnalysis() {
 									</div>
 								</div>
 							)}
-
-							<Button
-								onClick={handleFileMode}
-								disabled={loading || !fileContent.trim()}
-								className="w-full"
-							>
-								{loading ? "分析中..." : "开始分析"}
-							</Button>
 						</div>
 					</div>
 				</div>

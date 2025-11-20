@@ -8,6 +8,7 @@ import json
 import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
+from collections import Counter
 from market_structure_analysis import MarketStructureAnalyzer
 
 # 尝试导入 akshare
@@ -418,6 +419,9 @@ class InteractiveMarketAnalyzer:
         watch_count = 0
         caution_count = 0
         
+        # 收集买入建议股票的信息
+        buy_stocks_info = []  # 存储买入股票的代码和关键因素
+        
         for stock in stocks:
             timing = stock.get("timing", {})
             if timing and "timing" in timing:
@@ -428,6 +432,14 @@ class InteractiveMarketAnalyzer:
                 total_score += score
                 if recommendation == "买入":
                     buy_count += 1
+                    symbol = stock.get("symbol", "N/A")
+                    factors = timing_info.get("factors", [])
+                    # 记录买入股票的代码和关键因素
+                    buy_stocks_info.append({
+                        "symbol": symbol,
+                        "factors": factors,
+                        "score": score
+                    })
                 elif recommendation == "观望":
                     watch_count += 1
                 else:
@@ -472,8 +484,22 @@ class InteractiveMarketAnalyzer:
         result = f"市场状态: {market_regime}\n"
         result += f"推荐策略: {recommended_strategy}\n"
         result += f"\n股票分析统计:\n"
-        result += f"  买入建议: {buy_count} 只\n"
-        result += f"  观望建议: {watch_count} 只\n"
+        result += f"  买入建议: {buy_count} 只"
+        
+        # 如果有买入建议的股票，显示每只股票的代码和对应的关键因素
+        if buy_count > 0 and buy_stocks_info:
+            for stock_info in buy_stocks_info:
+                symbol = stock_info["symbol"]
+                factors = stock_info["factors"]
+                score = stock_info["score"]
+                result += f"\n    {symbol} (评分: {score}):"
+                if factors:
+                    for factor in factors:
+                        result += f"\n      - {factor}"
+                else:
+                    result += "\n      - 无关键因素"
+        
+        result += f"\n  观望建议: {watch_count} 只\n"
         result += f"  谨慎建议: {caution_count} 只\n"
         result += f"  平均评分: {avg_score:.2f}\n"
         result += strategy_explanation
@@ -500,6 +526,73 @@ class InteractiveMarketAnalyzer:
 - 个股基本面恶化时及时止损，避免损失扩大
 - 技术指标出现明显反转信号时考虑减仓
 - 市场出现系统性风险时降低仓位，保护本金"""
+    
+    def _save_buy_recommendations(self, stocks: List[Dict[str, Any]]) -> None:
+        """
+        将买入建议的分析统计保存到 Buy.txt 文件（追加模式）
+        
+        Args:
+            stocks: 股票分析结果列表
+        """
+        if not stocks:
+            return
+        
+        # 收集买入建议股票的信息
+        buy_stocks_info = []
+        
+        for stock in stocks:
+            timing = stock.get("timing", {})
+            if timing and "timing" in timing:
+                timing_info = timing["timing"]
+                recommendation = timing_info.get("recommendation", "观望")
+                
+                if recommendation == "买入":
+                    symbol = stock.get("symbol", "N/A")
+                    factors = timing_info.get("factors", [])
+                    score = timing_info.get("score", 0)
+                    buy_stocks_info.append({
+                        "symbol": symbol,
+                        "factors": factors,
+                        "score": score
+                    })
+        
+        # 如果没有买入建议，不保存
+        if not buy_stocks_info:
+            return
+        
+        # 格式化买入建议信息
+        buy_info = []
+        buy_info.append("="*60)
+        buy_info.append(f"买入建议统计 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        buy_info.append("="*60)
+        buy_info.append(f"买入建议: {len(buy_stocks_info)} 只\n")
+        
+        for stock_info in buy_stocks_info:
+            symbol = stock_info["symbol"]
+            factors = stock_info["factors"]
+            score = stock_info["score"]
+            buy_info.append(f"{symbol} (评分: {score}):")
+            if factors:
+                for factor in factors:
+                    buy_info.append(f"  - {factor}")
+            else:
+                buy_info.append("  - 无关键因素")
+            buy_info.append("")
+        
+        buy_info.append("="*60)
+        buy_info.append("")
+        
+        # 追加保存到 Buy.txt 文件（保存在项目根目录）
+        try:
+            # 获取项目根目录（interactive_analysis.py 所在目录）
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            buy_file_path = os.path.join(project_root, "Buy.txt")
+            
+            with open(buy_file_path, "a", encoding="utf-8") as f:
+                f.write("\n".join(buy_info))
+            print(f"✅ 买入建议已追加保存到: {buy_file_path}")
+        except Exception as e:
+            print(f"⚠️ 保存买入建议到 Buy.txt 时出错: {e}")
     
     async def interactive_workflow(self):
         """
@@ -590,6 +683,9 @@ class InteractiveMarketAnalyzer:
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(analysis, f, ensure_ascii=False, indent=2)
         print(f"✅ 数据已保存到: {json_filename}")
+        
+        # 保存买入建议统计到 Buy.txt（追加模式）
+        self._save_buy_recommendations(analysis.get("stocks", []))
         
         return analysis
     

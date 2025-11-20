@@ -102,6 +102,10 @@ def analyze_custom_stocks_api(request):
                     market_type=market_type
                 )
                 report = analyzer.format_custom_analysis_report(analysis)
+                
+                # 保存买入建议到 Buy.txt（追加模式）
+                analyzer._save_buy_recommendations(analysis.get("stocks", []))
+                
                 return {
                     'success': True,
                     'data': analysis,
