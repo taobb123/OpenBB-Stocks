@@ -108,16 +108,29 @@ class InteractiveMarketAnalyzer:
             if hist_data.empty:
                 return {"error": "无法获取历史数据"}
             
+            # 标准化列名（akshare可能返回英文列名，统一转换为中文）
+            df = hist_data.copy()
+            column_mapping = {
+                "close": "收盘",
+                "volume": "成交量",
+                "open": "开盘",
+                "high": "最高",
+                "low": "最低"
+            }
+            for eng_col, cn_col in column_mapping.items():
+                if eng_col in df.columns and cn_col not in df.columns:
+                    df[cn_col] = df[eng_col]
+            
             # 计算技术指标
             analysis = {
                 "symbol": symbol,
-                "current_price": float(hist_data.iloc[-1]["收盘"]) if "收盘" in hist_data.columns else 0,
+                "current_price": float(df.iloc[-1]["收盘"]) if "收盘" in df.columns else 0,
                 "indicators": {}
             }
             
             # 1. 移动平均线
-            if "收盘" in hist_data.columns:
-                close_prices = hist_data["收盘"].astype(float)
+            if "收盘" in df.columns:
+                close_prices = df["收盘"].astype(float)
                 current_price = close_prices.iloc[-1]
                 ma5 = close_prices.tail(5).mean()
                 ma20 = close_prices.tail(20).mean()
@@ -143,8 +156,8 @@ class InteractiveMarketAnalyzer:
                 }
             
             # 2. 相对强弱指标（RSI）
-            if "收盘" in hist_data.columns:
-                close_prices = hist_data["收盘"].astype(float)
+            if "收盘" in df.columns:
+                close_prices = df["收盘"].astype(float)
                 delta = close_prices.diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -164,8 +177,8 @@ class InteractiveMarketAnalyzer:
                 }
             
             # 3. 价格位置（相对于52周高低点）
-            if "收盘" in hist_data.columns:
-                close_prices = hist_data["收盘"].astype(float)
+            if "收盘" in df.columns:
+                close_prices = df["收盘"].astype(float)
                 high_52w = close_prices.max()
                 low_52w = close_prices.min()
                 current = close_prices.iloc[-1]
@@ -194,8 +207,8 @@ class InteractiveMarketAnalyzer:
                 }
             
             # 3.5. 价格突破分析（右侧交易关键指标）
-            if "收盘" in hist_data.columns:
-                close_prices = hist_data["收盘"].astype(float)
+            if "收盘" in df.columns:
+                close_prices = df["收盘"].astype(float)
                 current_price = close_prices.iloc[-1]
                 # 计算近期高点（排除当前价格，看前20日、60日）
                 if len(close_prices) >= 21:
@@ -227,8 +240,8 @@ class InteractiveMarketAnalyzer:
                 }
             
             # 3.6. 动量指标（价格变化率）
-            if "收盘" in hist_data.columns:
-                close_prices = hist_data["收盘"].astype(float)
+            if "收盘" in df.columns:
+                close_prices = df["收盘"].astype(float)
                 # 计算5日、20日价格变化率
                 momentum_5d = ((close_prices.iloc[-1] - close_prices.iloc[-6]) / close_prices.iloc[-6] * 100) if len(close_prices) >= 6 else 0
                 momentum_20d = ((close_prices.iloc[-1] - close_prices.iloc[-21]) / close_prices.iloc[-21] * 100) if len(close_prices) >= 21 else 0
@@ -240,18 +253,32 @@ class InteractiveMarketAnalyzer:
                              "弱势" if momentum_5d < -3 or momentum_20d < -5 else "正常"
                 }
             
-            # 4. 成交量分析
-            if "成交量" in hist_data.columns:
-                volumes = hist_data["成交量"].astype(float)
+            # 4. 成交量分析（增强版：包含成交量趋势和价量配合）
+            if "成交量" in df.columns:
+                volumes = df["成交量"].astype(float)
                 avg_volume = volumes.tail(20).mean()
                 current_volume = volumes.iloc[-1]
                 volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+                
+                # 成交量趋势分析（5日均量 vs 20日均量）
+                volume_ma5 = volumes.tail(5).mean() if len(volumes) >= 5 else avg_volume
+                volume_ma20 = avg_volume
+                volume_trend = "上升" if volume_ma5 > volume_ma20 else "下降"
+                
+                # 价量配合分析（价格上涨+放量 = 强势信号）
+                price_volume_sync = False
+                if "收盘" in df.columns:
+                    price_change = (close_prices.iloc[-1] - close_prices.iloc[-2]) / close_prices.iloc[-2] * 100 if len(close_prices) >= 2 else 0
+                    # 价格上涨且放量，或价格下跌且缩量，都是价量配合
+                    price_volume_sync = (price_change > 0 and volume_ratio > 1.2) or (price_change < 0 and volume_ratio < 0.8)
                 
                 analysis["indicators"]["Volume"] = {
                     "current": float(current_volume),
                     "avg_20d": float(avg_volume),
                     "ratio": float(volume_ratio),
-                    "signal": "放量" if volume_ratio > 1.5 else "缩量" if volume_ratio < 0.7 else "正常"
+                    "signal": "放量" if volume_ratio > 1.5 else "缩量" if volume_ratio < 0.7 else "正常",
+                    "trend": volume_trend,  # 成交量趋势
+                    "price_volume_sync": price_volume_sync  # 价量配合
                 }
             
             # 综合时机判断（右侧交易风格：追涨杀跌）
@@ -268,9 +295,13 @@ class InteractiveMarketAnalyzer:
                 elif ma_data.get("trend") == "上升":
                     timing_score += 1
                     timing_factors.append("✅ 均线呈上升趋势")
+                elif ma_data.get("trend") == "下降":
+                    timing_score -= 2
+                    timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
             else:
-                timing_score -= 2
-                timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
+                # 没有MA数据时，不应该直接判断为下降趋势
+                timing_score -= 1  # 数据不足时适当减分，但不直接判断为下降趋势
+                timing_factors.append("⚠️ 均线数据不足，无法判断趋势")
             
             # 2. 价格在均线之上（只有在有 MA 数据时才检查）
             if ma_data and ma_data.get("price_above_ma", False):
@@ -339,17 +370,28 @@ class InteractiveMarketAnalyzer:
                     timing_score -= 2
                     timing_factors.append("❌ 动量偏弱，缺乏上涨动力")
             
-            # 7. 成交量（右侧交易需要放量确认）
+            # 7. 成交量（右侧交易需要放量确认，增强版：考虑价量配合）
             volume_signal = None  # 初始化为 None，避免未定义错误
             volume_ratio = 1.0
+            volume_trend = None
+            price_volume_sync = False
             if "Volume" in analysis["indicators"]:
                 volume_data = analysis["indicators"]["Volume"]
                 volume_signal = volume_data.get("signal", "正常")
                 volume_ratio = volume_data.get("ratio", 1)
+                volume_trend = volume_data.get("trend")
+                price_volume_sync = volume_data.get("price_volume_sync", False)
             
-            if volume_signal == "放量" and volume_ratio > 1.5:
+            # 价量配合是强势信号（价格上涨+放量）
+            if price_volume_sync and volume_ratio > 1.2:
+                timing_score += 3
+                timing_factors.append(f"✅ 价量配合良好，价格上涨伴随放量{volume_ratio:.2f}倍，资金积极介入")
+            elif volume_signal == "放量" and volume_ratio > 1.5:
                 timing_score += 2
                 timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
+            elif volume_trend == "上升" and volume_ratio > 1.2:
+                timing_score += 1
+                timing_factors.append(f"✅ 成交量趋势上升，量比{volume_ratio:.2f}，资金关注度提升")
             elif volume_signal == "缩量":
                 timing_score -= 1
                 timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
