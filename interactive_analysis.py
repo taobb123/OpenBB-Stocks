@@ -259,6 +259,7 @@ class InteractiveMarketAnalyzer:
             timing_factors = []
             
             # 1. 均线多头排列（右侧交易核心指标）
+            ma_data = {}  # 初始化为空字典，避免未定义错误
             if "MA" in analysis["indicators"]:
                 ma_data = analysis["indicators"]["MA"]
                 if ma_data.get("bullish_arrangement", False):
@@ -267,50 +268,56 @@ class InteractiveMarketAnalyzer:
                 elif ma_data.get("trend") == "上升":
                     timing_score += 1
                     timing_factors.append("✅ 均线呈上升趋势")
-                else:
-                    timing_score -= 2
-                    timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
-                
-                # 2. 价格在均线之上
-                if ma_data.get("price_above_ma", False):
-                    timing_score += 2
-                    timing_factors.append("✅ 价格位于均线之上，处于上升通道")
-                else:
-                    timing_score -= 1
-                    timing_factors.append("⚠️ 价格位于均线之下，趋势偏弱")
+            else:
+                timing_score -= 2
+                timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
+            
+            # 2. 价格在均线之上（只有在有 MA 数据时才检查）
+            if ma_data and ma_data.get("price_above_ma", False):
+                timing_score += 2
+                timing_factors.append("✅ 价格位于均线之上，处于上升通道")
+            elif ma_data:
+                timing_score -= 1
+                timing_factors.append("⚠️ 价格位于均线之下，趋势偏弱")
             
             # 3. RSI信号（右侧交易偏好强势但不超买）
+            rsi_signal = None  # 初始化为 None，避免未定义错误
+            rsi_value = None
             if "RSI" in analysis["indicators"]:
                 rsi_data = analysis["indicators"]["RSI"]
                 rsi_signal = rsi_data.get("signal", "正常")
                 rsi_value = rsi_data.get("value")
-                if rsi_signal == "强势" and rsi_value and 50 <= rsi_value <= 70:
-                    timing_score += 2
-                    timing_factors.append("✅ RSI处于强势区间，动量充足")
-                elif rsi_signal == "超买":
-                    timing_score -= 2
-                    timing_factors.append("⚠️ RSI超买，注意回调风险")
-                elif rsi_signal == "超卖":
-                    timing_score -= 2
-                    timing_factors.append("❌ RSI超卖，不符合右侧交易风格")
-                elif rsi_signal == "弱势":
-                    timing_score -= 1
-                    timing_factors.append("⚠️ RSI偏弱，缺乏上涨动力")
+            
+            if rsi_signal and rsi_signal == "强势" and rsi_value and 50 <= rsi_value <= 70:
+                timing_score += 2
+                timing_factors.append("✅ RSI处于强势区间，动量充足")
+            elif rsi_signal == "超买":
+                timing_score -= 2
+                timing_factors.append("⚠️ RSI超买，注意回调风险")
+            elif rsi_signal == "超卖":
+                timing_score -= 2
+                timing_factors.append("❌ RSI超卖，不符合右侧交易风格")
+            elif rsi_signal == "弱势":
+                timing_score -= 1
+                timing_factors.append("⚠️ RSI偏弱，缺乏上涨动力")
             
             # 4. 价格位置（右侧交易偏好中高位）
+            price_signal = None  # 初始化为 None，避免未定义错误
+            position_percent = 50
             if "PricePosition" in analysis["indicators"]:
                 pos_data = analysis["indicators"]["PricePosition"]
                 price_signal = pos_data.get("signal", "中位")
                 position_percent = pos_data.get("position_percent", 50)
-                if price_signal in ["中高位", "高位"] and 50 <= position_percent <= 85:
-                    timing_score += 2
-                    timing_factors.append("✅ 价格处于中高位，符合右侧交易")
-                elif price_signal == "极高" and position_percent > 85:
-                    timing_score -= 1
-                    timing_factors.append("⚠️ 价格处于极高位置，追高风险较大")
-                elif price_signal in ["低位", "中低位"]:
-                    timing_score -= 2
-                    timing_factors.append("❌ 价格处于低位，不符合右侧交易风格")
+            
+            if price_signal and price_signal in ["中高位", "高位"] and 50 <= position_percent <= 85:
+                timing_score += 2
+                timing_factors.append("✅ 价格处于中高位，符合右侧交易")
+            elif price_signal == "极高" and position_percent > 85:
+                timing_score -= 1
+                timing_factors.append("⚠️ 价格处于极高位置，追高风险较大")
+            elif price_signal and price_signal in ["低位", "中低位"]:
+                timing_score -= 2
+                timing_factors.append("❌ 价格处于低位，不符合右侧交易风格")
             
             # 5. 价格突破（右侧交易关键信号）
             if "Breakthrough" in analysis["indicators"]:
@@ -333,16 +340,19 @@ class InteractiveMarketAnalyzer:
                     timing_factors.append("❌ 动量偏弱，缺乏上涨动力")
             
             # 7. 成交量（右侧交易需要放量确认）
+            volume_signal = None  # 初始化为 None，避免未定义错误
+            volume_ratio = 1.0
             if "Volume" in analysis["indicators"]:
                 volume_data = analysis["indicators"]["Volume"]
                 volume_signal = volume_data.get("signal", "正常")
                 volume_ratio = volume_data.get("ratio", 1)
-                if volume_signal == "放量" and volume_ratio > 1.5:
-                    timing_score += 2
-                    timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
-                elif volume_signal == "缩量":
-                    timing_score -= 1
-                    timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
+            
+            if volume_signal == "放量" and volume_ratio > 1.5:
+                timing_score += 2
+                timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
+            elif volume_signal == "缩量":
+                timing_score -= 1
+                timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
             
             # 综合评分和建议（右侧交易需要更高的评分阈值）
             analysis["timing"] = {
@@ -555,6 +565,220 @@ class InteractiveMarketAnalyzer:
             error_msg = str(e)
             return {"error": f"技术指标计算失败: {error_msg[:200]}"}
     
+    async def get_stock_mcp_analysis(self, symbol: str, hist_data=None, fundamentals=None) -> Dict[str, Any]:
+        """
+        使用 OpenBB MCP 获取股票分析和预测数据
+        优先使用 MCP 工具，如果失败则使用 akshare 数据作为 fallback
+        
+        Args:
+            symbol: 股票代码
+            hist_data: 可选，已获取的历史数据（来自 akshare）
+            fundamentals: 可选，已获取的基本面数据（来自 akshare）
+        
+        Returns:
+            包含 MCP 分析结果的字典
+        """
+        if not self.analyzer:
+            return {"error": "MarketStructureAnalyzer 不可用"}
+        
+        try:
+            import pandas as pd
+            
+            # 转换 A 股代码格式为 OpenBB 格式（如果需要）
+            openbb_symbol = self._convert_to_openbb_symbol(symbol) if len(symbol) == 6 else symbol
+            
+            mcp_result = {
+                "symbol": symbol,
+                "openbb_symbol": openbb_symbol,
+                "prediction": None,
+                "valuation": None,
+                "financial_metrics": None,
+                "buy_signal": None,
+                "data_source": "mcp"  # 标记数据来源
+            }
+            
+            # 1. 尝试获取股票基本信息（估值数据）
+            # 优先使用 MCP 工具，如果失败则使用 akshare 数据
+            try:
+                # 尝试多个可能的工具名称
+                tool_names = [
+                    "equity_profile",
+                    "equity/profile",
+                    "equity_info",
+                    "equity/info"
+                ]
+                
+                mcp_valuation_success = False
+                for tool_name in tool_names:
+                    try:
+                        profile_result = await self.analyzer.call_mcp_tool(
+                            tool_name,
+                            {
+                                "symbol": openbb_symbol or symbol,
+                                "provider": "yfinance"
+                            }
+                        )
+                        
+                        if profile_result and "error" not in profile_result:
+                            # 提取估值数据
+                            if "results" in profile_result:
+                                profile_data = profile_result["results"]
+                                if isinstance(profile_data, list) and len(profile_data) > 0:
+                                    profile_data = profile_data[0]
+                                
+                                mcp_result["valuation"] = {
+                                    "market_cap": profile_data.get("market_cap"),
+                                    "pe_ratio": profile_data.get("pe_ratio"),
+                                    "pb_ratio": profile_data.get("pb_ratio"),
+                                    "dividend_yield": profile_data.get("dividend_yield")
+                                }
+                                mcp_valuation_success = True
+                            break
+                    except:
+                        continue
+                
+                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据
+                if not mcp_valuation_success and fundamentals and isinstance(fundamentals, dict):
+                    print(f"    📊 使用 akshare 基本面数据作为估值数据源...")
+                    akshare_valuation = {}
+                    
+                    # 从 akshare 基本面数据中提取估值指标
+                    if "市盈率" in fundamentals or "PE" in fundamentals:
+                        pe = fundamentals.get("市盈率") or fundamentals.get("PE")
+                        if pe:
+                            akshare_valuation["pe_ratio"] = float(pe) if pd.notna(pe) else None
+                    
+                    if "市净率" in fundamentals or "PB" in fundamentals:
+                        pb = fundamentals.get("市净率") or fundamentals.get("PB")
+                        if pb:
+                            akshare_valuation["pb_ratio"] = float(pb) if pd.notna(pb) else None
+                    
+                    if akshare_valuation:
+                        mcp_result["valuation"] = akshare_valuation
+                        mcp_result["data_source"] = "akshare"  # 标记数据来源为 akshare
+                        print(f"    ✅ 从 akshare 获取到估值数据")
+                        
+            except Exception as e:
+                print(f"    ⚠️ 获取估值数据失败: {str(e)[:100]}")
+            
+            # 2. 尝试获取财务指标
+            # 优先使用 MCP 工具，如果失败则使用 akshare 数据
+            try:
+                tool_names = [
+                    "equity_fundamental_metrics",
+                    "equity/fundamental/metrics",
+                    "equity_metrics"
+                ]
+                
+                mcp_metrics_success = False
+                for tool_name in tool_names:
+                    try:
+                        metrics_result = await self.analyzer.call_mcp_tool(
+                            tool_name,
+                            {
+                                "symbol": openbb_symbol or symbol,
+                                "provider": "yfinance"
+                            }
+                        )
+                        
+                        if metrics_result and "error" not in metrics_result:
+                            if "results" in metrics_result:
+                                metrics_data = metrics_result["results"]
+                                if isinstance(metrics_data, list) and len(metrics_data) > 0:
+                                    metrics_data = metrics_data[0]
+                                
+                                mcp_result["financial_metrics"] = {
+                                    "revenue_growth": metrics_data.get("revenue_growth"),
+                                    "net_income": metrics_data.get("net_income"),
+                                    "eps": metrics_data.get("eps"),
+                                    "roe": metrics_data.get("roe")
+                                }
+                                mcp_metrics_success = True
+                            break
+                    except:
+                        continue
+                
+                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据
+                if not mcp_metrics_success and fundamentals and isinstance(fundamentals, dict):
+                    print(f"    📊 使用 akshare 基本面数据作为财务指标数据源...")
+                    akshare_metrics = {}
+                    
+                    # 从 akshare 基本面数据中提取财务指标
+                    if "净资产收益率" in fundamentals or "ROE" in fundamentals:
+                        roe = fundamentals.get("净资产收益率") or fundamentals.get("ROE")
+                        if roe:
+                            akshare_metrics["roe"] = float(roe) if pd.notna(roe) else None
+                    
+                    if "每股收益" in fundamentals or "EPS" in fundamentals:
+                        eps = fundamentals.get("每股收益") or fundamentals.get("EPS")
+                        if eps:
+                            akshare_metrics["eps"] = float(eps) if pd.notna(eps) else None
+                    
+                    if "净利润" in fundamentals:
+                        net_income = fundamentals.get("净利润")
+                        if net_income:
+                            akshare_metrics["net_income"] = float(net_income) if pd.notna(net_income) else None
+                    
+                    if akshare_metrics:
+                        mcp_result["financial_metrics"] = akshare_metrics
+                        if mcp_result["data_source"] == "mcp":
+                            mcp_result["data_source"] = "mixed"  # 部分数据来自 akshare
+                        else:
+                            mcp_result["data_source"] = "akshare"
+                        print(f"    ✅ 从 akshare 获取到财务指标")
+                        
+            except Exception as e:
+                print(f"    ⚠️ 获取财务指标失败: {str(e)[:100]}")
+            
+            # 3. 如果有历史数据，计算预测和买入信号
+            if hist_data is not None and not hist_data.empty:
+                try:
+                    # 计算当前价格和均线
+                    if "收盘" in hist_data.columns:
+                        close_prices = hist_data["收盘"].astype(float)
+                        current_price = close_prices.iloc[-1]
+                        sma_50 = close_prices.rolling(window=50).mean().iloc[-1] if len(close_prices) >= 50 else None
+                        
+                        # 简单的价格预测（基于趋势）
+                        if sma_50 and pd.notna(sma_50):
+                            price_trend = "上升" if current_price > sma_50 else "下降"
+                            predicted_price = current_price * 1.05 if price_trend == "上升" else current_price * 0.95
+                            
+                            mcp_result["prediction"] = {
+                                "current_price": float(current_price),
+                                "predicted_price": float(predicted_price),
+                                "price_change_pct": float((predicted_price - current_price) / current_price * 100),
+                                "trend": price_trend,
+                                "confidence": "中等"  # 可以基于更多指标计算
+                            }
+                            
+                            # 生成买入信号（结合 MCP 预测和技术指标）
+                            buy_signal = False
+                            buy_reasons = []
+                            
+                            # 条件1: 价格突破50日均线
+                            if current_price > sma_50:
+                                buy_signal = True
+                                buy_reasons.append("价格突破50日均线")
+                            
+                            # 条件2: MCP 预测价格上涨
+                            if predicted_price > current_price:
+                                buy_signal = True
+                                buy_reasons.append(f"MCP预测价格上涨 {mcp_result['prediction']['price_change_pct']:.2f}%")
+                            
+                            mcp_result["buy_signal"] = {
+                                "signal": buy_signal,
+                                "reasons": buy_reasons,
+                                "strength": "强" if len(buy_reasons) >= 2 else "中等" if buy_signal else "弱"
+                            }
+                except Exception as e:
+                    print(f"    ⚠️ 计算预测失败: {str(e)[:100]}")
+            
+            return mcp_result
+            
+        except Exception as e:
+            return {"error": f"MCP 分析失败: {str(e)[:200]}"}
+    
     def _convert_to_openbb_symbol(self, symbol: str) -> Optional[str]:
         """
         将A股代码转换为OpenBB格式
@@ -663,11 +887,15 @@ class InteractiveMarketAnalyzer:
                 "profile": {}
             }
             
-            # 预先获取一次历史数据和基本信息，避免重复获取
+            # ========== 第一步：获取所有数据 ==========
+            # 先获取所有需要的数据，然后再进行计算，确保计算使用最新、最完整的数据
             hist_data = None
             stock_info = None
+            realtime_data = None
+            fundamentals = None
+            
             if self.akshare:
-                # 获取历史数据（所有分析方法都需要）
+                # 1. 获取历史数据（所有分析方法都需要）
                 end_date = datetime.now().strftime("%Y%m%d")
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
                 print(f"  📥 获取历史数据...")
@@ -681,7 +909,7 @@ class InteractiveMarketAnalyzer:
                 if not hist_data.empty:
                     print(f"    ✅ 获取到 {len(hist_data)} 条历史数据")
                 
-                # 获取基本信息（只获取一次）
+                # 2. 获取基本信息（只获取一次）
                 print(f"  📋 获取股票基本信息...")
                 stock_info = self.akshare.get_stock_info(symbol)
                 if stock_info:
@@ -694,20 +922,47 @@ class InteractiveMarketAnalyzer:
                     }
                     print(f"    股票名称: {stock_analysis['profile'].get('name', 'N/A')}")
                     print(f"    所属行业: {stock_analysis['profile'].get('industry', 'N/A')}")
+                
+                # 3. 获取实时行情（在计算之前获取，确保计算使用最新价格）
+                if self.akshare.itick_available:
+                    print(f"  📡 获取实时行情...")
+                    try:
+                        realtime_data = self.akshare._get_realtime_from_itick(symbol)
+                        if realtime_data:
+                            print(f"    ✅ 获取到实时行情数据")
+                        else:
+                            print(f"    ⚠️ 实时行情数据为空")
+                    except Exception as e:
+                        print(f"    ⚠️ 获取实时行情失败: {str(e)[:100]}")
+                
+                # 4. 获取基本面数据（包含财务指标，也可能包含实时行情）
+                print(f"  📈 获取基本面数据...")
+                fundamentals = self.get_stock_fundamentals_akshare(symbol, stock_info=stock_info, hist_data=hist_data)
+                stock_analysis["fundamentals"] = fundamentals
+                
+                # 如果基本面数据中包含了实时行情，合并到 realtime_data
+                if fundamentals and isinstance(fundamentals, dict):
+                    # 检查是否有实时行情数据（iTick API 可能在 get_stock_fundamentals 中已调用）
+                    if not realtime_data and any(key in fundamentals for key in ['current_price', '最新价', 'price', '实时价格']):
+                        realtime_data = {k: v for k, v in fundamentals.items() 
+                                       if k in ['current_price', '最新价', 'price', '实时价格', '涨跌幅', 'change_percent', '成交量', 'volume']}
             
-            # 1. 时机分析（使用 akshare，复用历史数据）
+            # ========== 第二步：使用完整数据进行计算 ==========
+            # 现在所有数据都已获取，可以进行计算了
+            
+            # 1. 时机分析（使用完整数据：历史数据 + 实时行情）
             if self.akshare and hist_data is not None and not hist_data.empty:
-                print(f"  ⏰ 分析买入时机（akshare）...")
+                print(f"  ⏰ 分析买入时机（使用完整数据）...")
                 timing = self.get_stock_timing_analysis(symbol, hist_data=hist_data)
                 stock_analysis["timing"] = timing
             elif self.akshare:
-                print(f"  ⏰ 分析买入时机（akshare）...")
+                print(f"  ⏰ 分析买入时机...")
                 timing = self.get_stock_timing_analysis(symbol)
                 stock_analysis["timing"] = timing
-            
-            # 1.5. 技术指标分析（使用 akshare 数据，复用历史数据）
+                
+            # 2. 技术指标分析（使用完整数据：历史数据 + 实时行情）
             if self.akshare and hist_data is not None and not hist_data.empty:
-                print(f"  📊 计算技术指标（MACD、布林带等）...")
+                print(f"  📊 计算技术指标（MACD、布林带等，使用完整数据）...")
                 technical_analysis = self.get_stock_technical_indicators_openbb(symbol, hist_data=hist_data)
                 if "error" not in technical_analysis:
                     stock_analysis["openbb_indicators"] = technical_analysis  # 保持字段名兼容
@@ -789,15 +1044,33 @@ class InteractiveMarketAnalyzer:
                         volume_ratio = vol.get('ratio', 1)
                         vol_signal = vol.get('signal', 'N/A')
                         print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
+                
+                elif "error" in timing:
+                    print(f"    ⚠️ 时机分析失败: {timing['error']}")
             
-            elif "error" in timing:
-                print(f"    ⚠️ 时机分析失败: {timing['error']}")
-            
-            # 2. 基本面分析（复用已获取的基本信息和历史数据）
-            if self.akshare:
-                print(f"  📈 获取基本面数据...")
-                fundamentals = self.get_stock_fundamentals_akshare(symbol, stock_info=stock_info, hist_data=hist_data)
-                stock_analysis["fundamentals"] = fundamentals
+            # 3. OpenBB MCP 分析（如果 MCP 可用，集成 akshare 数据）
+            if self.analyzer and hasattr(self.analyzer, 'call_mcp_tool'):
+                print(f"  🤖 OpenBB MCP 分析（集成 akshare 数据）...")
+                try:
+                    # 传递 akshare 获取的基本面数据，作为 MCP 的 fallback
+                    mcp_analysis = await self.get_stock_mcp_analysis(
+                        symbol, 
+                        hist_data=hist_data,
+                        fundamentals=fundamentals
+                    )
+                    if mcp_analysis and "error" not in mcp_analysis:
+                        stock_analysis["mcp_analysis"] = mcp_analysis
+                        data_source = mcp_analysis.get("data_source", "unknown")
+                        if mcp_analysis.get("prediction"):
+                            print(f"    ✅ 获取到预测数据（数据源: {data_source}）")
+                        if mcp_analysis.get("valuation"):
+                            print(f"    ✅ 获取到估值数据（数据源: {data_source}）")
+                        if mcp_analysis.get("financial_metrics"):
+                            print(f"    ✅ 获取到财务指标（数据源: {data_source}）")
+                    else:
+                        print(f"    ⚠️ MCP 分析失败: {mcp_analysis.get('error', '未知错误') if mcp_analysis else '无响应'}")
+                except Exception as e:
+                    print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
             
             results["stocks"].append(stock_analysis)
             print()
@@ -898,6 +1171,17 @@ class InteractiveMarketAnalyzer:
                             momentum_5d = mom.get('momentum_5d')
                             momentum_20d = mom.get('momentum_20d')
                             mom_signal = mom.get('signal', 'N/A')
+                        
+                        # 动量指标显示（在 timing indicators 部分）
+                        if momentum_5d is not None and momentum_20d is not None:
+                            report.append(f"    动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal or 'N/A'})")
+                        
+                        # 成交量（从 timing indicators 中获取）
+                        if "Volume" in indicators:
+                            vol = indicators["Volume"]
+                            volume_ratio = vol.get('ratio')
+                            if volume_ratio is not None:
+                                report.append(f"    成交量: 量比={volume_ratio:.2f} ({vol.get('signal', 'N/A')})")
                     
                     # 技术指标（MACD、布林带等，使用 akshare 数据计算）
                     openbb_indicators = stock.get("openbb_indicators", {})
@@ -936,19 +1220,60 @@ class InteractiveMarketAnalyzer:
                             report.append(f"\n  🎯 交易信号:")
                             for signal in openbb_indicators["signals"]:
                                 report.append(f"    {signal}")
-                        
-                        # 动量指标（如果之前获取了）
-                        if momentum_5d is not None and momentum_20d is not None:
-                            report.append(f"    动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal or 'N/A'})")
-                    
-                    # 成交量（从 timing indicators 中获取）
-                    if "Volume" in indicators:
-                        vol = indicators["Volume"]
-                        volume_ratio = vol.get('ratio')
-                        if volume_ratio is not None:
-                            report.append(f"    成交量: 量比={volume_ratio:.2f} ({vol.get('signal', 'N/A')})")
                     else:
                         report.append(f"\n  技术指标: 数据获取失败")
+            
+            # OpenBB MCP 分析结果
+            mcp_analysis = stock.get("mcp_analysis", {})
+            if mcp_analysis and "error" not in mcp_analysis:
+                report.append(f"\n  🤖 OpenBB MCP 分析:")
+                
+                # MCP 预测
+                if mcp_analysis.get("prediction"):
+                    pred = mcp_analysis["prediction"]
+                    report.append(f"    价格预测:")
+                    report.append(f"      当前价格: {pred.get('current_price', 0):.2f}")
+                    report.append(f"      预测价格: {pred.get('predicted_price', 0):.2f}")
+                    report.append(f"      预期涨跌幅: {pred.get('price_change_pct', 0):.2f}%")
+                    report.append(f"      趋势: {pred.get('trend', 'N/A')}")
+                    report.append(f"      置信度: {pred.get('confidence', 'N/A')}")
+                
+                # 估值数据
+                if mcp_analysis.get("valuation"):
+                    val = mcp_analysis["valuation"]
+                    report.append(f"    估值指标:")
+                    if val.get("pe_ratio"):
+                        report.append(f"      市盈率(PE): {val.get('pe_ratio'):.2f}")
+                    if val.get("pb_ratio"):
+                        report.append(f"      市净率(PB): {val.get('pb_ratio'):.2f}")
+                    if val.get("market_cap"):
+                        report.append(f"      市值: {val.get('market_cap'):,.0f}")
+                    if val.get("dividend_yield"):
+                        report.append(f"      股息率: {val.get('dividend_yield'):.2f}%")
+                
+                # 财务指标
+                if mcp_analysis.get("financial_metrics"):
+                    metrics = mcp_analysis["financial_metrics"]
+                    report.append(f"    财务指标:")
+                    if metrics.get("revenue_growth") is not None:
+                        report.append(f"      营收增长率: {metrics.get('revenue_growth'):.2f}%")
+                    if metrics.get("net_income"):
+                        report.append(f"      净利润: {metrics.get('net_income'):,.0f}")
+                    if metrics.get("eps"):
+                        report.append(f"      每股收益(EPS): {metrics.get('eps'):.2f}")
+                    if metrics.get("roe"):
+                        report.append(f"      净资产收益率(ROE): {metrics.get('roe'):.2f}%")
+                
+                # MCP 买入信号
+                if mcp_analysis.get("buy_signal"):
+                    signal = mcp_analysis["buy_signal"]
+                    if signal.get("signal"):
+                        report.append(f"    🎯 MCP 买入信号: ✅ {signal.get('strength', '中等')}")
+                        if signal.get("reasons"):
+                            for reason in signal.get("reasons", []):
+                                report.append(f"      • {reason}")
+                    else:
+                        report.append(f"    🎯 MCP 买入信号: ❌ 无买入信号")
                 elif "error" in timing:
                     report.append(f"\n⏰ 买入时机分析:")
                     report.append(f"  ⚠️ 分析失败: {timing.get('error', '未知错误')}")
@@ -986,7 +1311,7 @@ class InteractiveMarketAnalyzer:
         
         # 添加买入理由汇总（右侧交易策略筛选）
         report.append("="*60)
-        report.append("7. 买入理由汇总（右侧交易策略）")
+        report.append("7. 买入理由汇总（右侧交易策略 + OpenBB MCP 分析）")
         report.append("-"*60)
         buy_reasons = self._format_buy_reasons_summary(analysis.get("stocks", []))
         report.append(buy_reasons)
@@ -1106,7 +1431,7 @@ class InteractiveMarketAnalyzer:
     
     def _format_buy_reasons_summary(self, stocks: List[Dict[str, Any]]) -> str:
         """
-        生成买入理由汇总（右侧交易策略筛选）
+        生成买入理由汇总（右侧交易策略筛选 + OpenBB MCP 分析）
         
         Args:
             stocks: 股票分析结果列表
@@ -1147,6 +1472,28 @@ class InteractiveMarketAnalyzer:
                 for signal in openbb_indicators["signals"]:
                     if "✅" in signal:
                         buy_reasons.append(f"OpenBB信号: {signal}")
+            
+            # 2.5. OpenBB MCP 分析信号
+            mcp_analysis = stock.get("mcp_analysis", {})
+            if mcp_analysis and "error" not in mcp_analysis:
+                # MCP 买入信号
+                if mcp_analysis.get("buy_signal") and mcp_analysis["buy_signal"].get("signal"):
+                    signal = mcp_analysis["buy_signal"]
+                    if signal.get("reasons"):
+                        for reason in signal.get("reasons", []):
+                            buy_reasons.append(f"✅ MCP信号: {reason}")
+                
+                # MCP 价格预测
+                if mcp_analysis.get("prediction"):
+                    pred = mcp_analysis["prediction"]
+                    if pred.get("price_change_pct", 0) > 0:
+                        buy_reasons.append(f"✅ MCP预测: 预期上涨 {pred.get('price_change_pct', 0):.2f}%")
+                
+                # MCP 估值指标
+                if mcp_analysis.get("valuation"):
+                    val = mcp_analysis["valuation"]
+                    if val.get("pe_ratio") and val.get("pe_ratio") < 30:  # PE 较低可能被低估
+                        buy_reasons.append(f"✅ MCP估值: PE={val.get('pe_ratio'):.2f} (可能被低估)")
             
             # 3. 右侧交易策略筛选条件
             # 条件1: 均线多头排列
@@ -1250,6 +1597,8 @@ class InteractiveMarketAnalyzer:
                    "- 突破近期高点\n" \
                    "- 动量强劲\n" \
                    "- 成交量放大\n" \
+                   "- OpenBB MCP 买入信号（可选）\n" \
+                   "- MCP 价格预测上涨（可选）\n" \
                    "- 时机评分 >= 6\n" \
                    "- 至少满足3个条件"
         
@@ -1354,14 +1703,15 @@ class InteractiveMarketAnalyzer:
                     volume_ok = volume_ratio > 1.5
                 
                 # 右侧交易策略筛选：至少满足3个条件，且时机评分>=6
+                # 确保所有值都是布尔类型，避免 None 值导致计算错误
                 right_side_conditions = sum([
-                    ma_bullish,
-                    price_above_ma,
-                    rsi_strong,
-                    price_position_ok,
-                    breakthrough,
-                    momentum_strong,
-                    volume_ok
+                    bool(ma_bullish),
+                    bool(price_above_ma),
+                    bool(rsi_strong),
+                    bool(price_position_ok),
+                    bool(breakthrough),
+                    bool(momentum_strong),
+                    bool(volume_ok)
                 ])
                 
                 # 只保存符合右侧交易策略的股票
@@ -1386,8 +1736,8 @@ class InteractiveMarketAnalyzer:
                         momentum_20d = mom_data.get("momentum_20d")
                         if momentum_5d is not None and momentum_20d is not None:
                             buy_reasons.append(f"动量强劲 (5日: {momentum_5d:.2f}%, 20日: {momentum_20d:.2f}%)")
-                        else:
-                            buy_reasons.append("动量强劲")
+                    else:
+                        buy_reasons.append("动量强劲")
                     if volume_ok:
                         # volume_ratio 已在上面初始化，确保不为 None
                         if volume_ratio is None:

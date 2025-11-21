@@ -131,9 +131,9 @@ analysis = await analyzer.analyze_custom_stocks(
 
 ### 1. MCP 服务器地址
 
-默认地址是 `http://127.0.0.1:803/mcp`，确保：
+默认地址是 `http://127.0.0.1:8002/mcp`，确保：
 - OpenBB MCP 服务器正在运行
-- 端口号正确（默认 8003
+- 端口号正确（默认 8002）
 - 网络连接正常
 
 ### 2. 数据提供商（Provider）

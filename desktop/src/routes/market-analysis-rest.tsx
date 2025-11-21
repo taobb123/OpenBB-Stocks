@@ -55,20 +55,29 @@ function MarketAnalysisRest() {
 		try {
 			// 使用健康检查端点（GET 请求，不需要 body）
 			const baseUrl = getApiBaseUrlWithoutPath();
-			const response = await fetch(`${baseUrl}/api/`, {
+			const healthCheckUrl = `${baseUrl}/api/`;
+			console.log(`检查 API 连接: ${healthCheckUrl}`);
+			
+			const response = await fetch(healthCheckUrl, {
 				method: "GET",
 				headers: { "Content-Type": "application/json" },
 			});
 			
+			console.log(`API 健康检查响应: ${response.status} ${response.statusText}`);
+			
 			if (response.ok) {
+				const data = await response.json();
+				console.log(`API 健康检查成功:`, data);
 				setApiReady(true);
 				setError(null);
 				return true;
 			} else {
 				throw new Error(`API returned ${response.status}`);
 			}
-		} catch (err) {
-			setError(`无法连接到后端 API，请确保 Django 服务器正在运行 (${getApiBaseUrlWithoutPath()})`);
+		} catch (err: any) {
+			console.error("API 连接检查失败:", err);
+			const errorMsg = `无法连接到后端 API，请确保 Django 服务器正在运行\n服务器地址: ${getApiBaseUrlWithoutPath()}\n错误: ${err.message || "网络错误"}`;
+			setError(errorMsg);
 			setApiReady(false);
 			return false;
 		}
@@ -113,6 +122,9 @@ function MarketAnalysisRest() {
 			setExtractedCodes(extractData.stock_codes);
 
 			// 步骤2：运行分析
+			console.log(`正在调用分析 API: ${API_BASE_URL}/analyze-custom-stocks/`);
+			console.log(`请求数据:`, { stock_codes: extractData.stock_codes, market_type: "A股" });
+			
 			const analyzeResponse = await fetch(`${API_BASE_URL}/analyze-custom-stocks/`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -122,20 +134,36 @@ function MarketAnalysisRest() {
 				}),
 			});
 
+			console.log(`分析 API 响应状态: ${analyzeResponse.status} ${analyzeResponse.statusText}`);
+
 			if (!analyzeResponse.ok) {
 				// 尝试解析错误响应
+				let errorMessage = `HTTP ${analyzeResponse.status}`;
+				let errorReport = `分析失败: HTTP ${analyzeResponse.status}`;
+				
 				try {
 					const errorData = await analyzeResponse.json();
-					setAnalysisResult({
-						success: false,
-						error: errorData.error || `HTTP ${analyzeResponse.status}`,
-						report: errorData.report || `分析失败: HTTP ${analyzeResponse.status}`
-					});
-				} catch {
-					setError(`分析失败: HTTP ${analyzeResponse.status}`);
+					errorMessage = errorData.error || errorMessage;
+					errorReport = errorData.report || errorReport;
+				} catch (parseError) {
+					// 如果无法解析 JSON，尝试读取文本
+					try {
+						const errorText = await analyzeResponse.text();
+						errorReport = `分析失败: HTTP ${analyzeResponse.status}\n${errorText}`;
+					} catch {
+						// 忽略解析错误
+					}
 				}
+				
+				setAnalysisResult({
+					success: false,
+					error: errorMessage,
+					report: errorReport
+				});
+				setError(errorMessage);
 			} else {
 				const analysisData: AnalysisResponse = await analyzeResponse.json();
+				console.log(`分析结果:`, { success: analysisData.success, hasReport: !!analysisData.report, hasError: !!analysisData.error });
 				
 				// 无论成功与否，都设置结果（这样报告可以显示）
 				setAnalysisResult(analysisData);
@@ -150,13 +178,16 @@ function MarketAnalysisRest() {
 			}
 		} catch (err: any) {
 			console.error("分析错误:", err);
+			const errorMessage = err.message || "分析失败，请检查后端服务器是否运行";
+			const errorReport = `分析失败:\n${errorMessage}\n\n请确保:\n1. 后端服务器正在运行 (${getApiBaseUrlWithoutPath()})\n2. API 地址正确 (${API_BASE_URL})\n3. 网络连接正常\n4. 检查浏览器控制台查看详细错误信息`;
+			
 			// 即使出错，也尝试显示错误信息
 			setAnalysisResult({
 				success: false,
-				error: err.message || "分析失败，请检查后端服务器是否运行",
-				report: `分析失败:\n${err.message || "请检查后端服务器是否运行"}\n\n请确保:\n1. 后端服务器正在运行\n2. API 地址正确\n3. 网络连接正常`
+				error: errorMessage,
+				report: errorReport
 			});
-			setError(err.message || "分析失败，请检查后端服务器是否运行");
+			setError(errorMessage);
 		} finally {
 			setLoading(false);
 		}
