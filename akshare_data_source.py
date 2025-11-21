@@ -80,7 +80,7 @@ class AKShareDataSource:
         adjust: str = "qfq"  # qfq=前复权, bfq=后复权, ""=不复权
     ) -> pd.DataFrame:
         """
-        获取股票历史数据
+        获取股票历史数据（直接使用 stock_zh_a_daily 接口）
         
         Args:
             symbol: 股票代码（6位数字，如 "600519"）
@@ -95,28 +95,55 @@ class AKShareDataSource:
         if not self.available:
             return pd.DataFrame()
         
+        # 如果没有指定日期，默认获取最近1年
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y%m%d")
+        
+        # 直接使用 stock_zh_a_daily（稳定可用的接口）
         try:
-            # 如果没有指定日期，默认获取最近1年
-            if not start_date:
-                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            if not end_date:
-                end_date = datetime.now().strftime("%Y%m%d")
+            print(f"  使用 stock_zh_a_daily 获取 {symbol} 历史数据...")
+            # stock_zh_a_daily 需要带市场前缀
+            if symbol.startswith("6"):
+                daily_symbol = f"sh{symbol}"  # 上海
+            elif symbol.startswith("0") or symbol.startswith("3"):
+                daily_symbol = f"sz{symbol}"  # 深圳
+            else:
+                daily_symbol = symbol
             
-            df = ak.stock_zh_a_hist(
-                symbol=symbol,
-                period=period,
-                start_date=start_date,
-                end_date=end_date,
-                adjust=adjust
-            )
-            return df
+            # 获取数据
+            df = ak.stock_zh_a_daily(symbol=daily_symbol, adjust=adjust)
+            if not df.empty:
+                # 如果指定了日期范围，进行过滤
+                if start_date and end_date:
+                    # 确保日期列是日期类型
+                    if "date" in df.columns:
+                        df["date"] = pd.to_datetime(df["date"])
+                        start_dt = pd.to_datetime(start_date, format="%Y%m%d")
+                        end_dt = pd.to_datetime(end_date, format="%Y%m%d")
+                        df = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
+                    elif "日期" in df.columns:
+                        df["日期"] = pd.to_datetime(df["日期"])
+                        start_dt = pd.to_datetime(start_date, format="%Y%m%d")
+                        end_dt = pd.to_datetime(end_date, format="%Y%m%d")
+                        df = df[(df["日期"] >= start_dt) & (df["日期"] <= end_dt)]
+                
+                if not df.empty:
+                    print(f"  ✅ 通过 stock_zh_a_daily 获取到 {len(df)} 条历史数据")
+                    return df
+                else:
+                    print(f"  ⚠️ 日期过滤后数据为空")
+            else:
+                print(f"  ⚠️ stock_zh_a_daily 返回空数据")
         except Exception as e:
-            print(f"⚠️ 获取 {symbol} 历史数据失败: {e}")
-            return pd.DataFrame()
+            print(f"  ❌ stock_zh_a_daily 失败: {str(e)[:200]}")
+        
+        return pd.DataFrame()
     
     def get_stock_info(self, symbol: str) -> Dict[str, Any]:
         """
-        获取股票基本信息
+        获取股票基本信息（直接使用 stock_info_a_code_name 接口）
         
         Args:
             symbol: 股票代码
@@ -127,21 +154,26 @@ class AKShareDataSource:
         if not self.available:
             return {}
         
+        # 直接使用 stock_info_a_code_name（稳定可用）
         try:
-            # 获取股票基本信息
-            info = ak.stock_individual_info_em(symbol=symbol)
-            # 转换为字典
-            info_dict = {}
-            if isinstance(info, pd.DataFrame):
-                for _, row in info.iterrows():
-                    key = row.iloc[0] if len(row) > 0 else ""
-                    value = row.iloc[1] if len(row) > 1 else ""
-                    if key and value:
-                        info_dict[key] = value
-            return info_dict
+            print(f"  使用 stock_info_a_code_name 获取 {symbol} 基本信息...")
+            info = ak.stock_info_a_code_name()
+            if not info.empty:
+                # 查找对应的股票代码
+                stock_info = info[info["code"] == symbol]
+                if not stock_info.empty:
+                    info_dict = {
+                        "股票简称": stock_info.iloc[0].get("name", ""),
+                        "名称": stock_info.iloc[0].get("name", "")
+                    }
+                    if info_dict.get("股票简称"):
+                        print(f"  ✅ 通过 stock_info_a_code_name 获取到基本信息")
+                        return info_dict
         except Exception as e:
-            print(f"⚠️ 获取 {symbol} 基本信息失败: {e}")
-            return {}
+            print(f"  ⚠️ stock_info_a_code_name 失败: {str(e)[:200]}")
+        
+        print(f"  ❌ 无法获取 {symbol} 基本信息")
+        return {}
     
     def get_sector_performance(self) -> List[Dict[str, Any]]:
         """
@@ -600,4 +632,138 @@ class AKShareDataSource:
         except Exception as e:
             print(f"⚠️ 筛选股票失败: {e}")
             return []
+    
+    # ==================== ETF 相关接口 ====================
+    
+    def get_etf_historical(
+        self,
+        symbol: str,
+        start_date: str = None,
+        end_date: str = None,
+        period: str = "daily",
+        adjust: str = "qfq"
+    ) -> pd.DataFrame:
+        """
+        获取ETF历史行情数据
+        
+        Args:
+            symbol: ETF代码（如 "510300"，不需要带市场前缀）
+            start_date: 开始日期（格式：YYYYMMDD）
+            end_date: 结束日期（格式：YYYYMMDD）
+            period: 数据周期，"daily"（日线）、"weekly"（周线）或"monthly"（月线）
+            adjust: 复权方式，"qfq"（前复权）、"hfq"（后复权）或""（不复权）
+        
+        Returns:
+            ETF历史行情数据 DataFrame
+        """
+        if not self.available:
+            return pd.DataFrame()
+        
+        # 如果没有指定日期，默认获取最近1年
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y%m%d")
+        
+        try:
+            print(f"  获取ETF {symbol} 历史数据（{start_date} 至 {end_date}）...")
+            df = ak.fund_etf_hist_em(
+                symbol=symbol,
+                period=period,
+                start_date=start_date,
+                end_date=end_date,
+                adjust=adjust
+            )
+            if not df.empty:
+                print(f"  ✅ 获取到 {len(df)} 条ETF历史数据")
+                return df
+            else:
+                print(f"  ⚠️ ETF历史数据为空")
+                return pd.DataFrame()
+        except Exception as e:
+            print(f"  ⚠️ 获取ETF历史数据失败: {e}")
+            return pd.DataFrame()
+    
+    def get_etf_spot(self) -> pd.DataFrame:
+        """
+        获取所有ETF的实时行情
+        
+        Returns:
+            包含所有ETF实时行情的 DataFrame
+        """
+        if not self.available:
+            return pd.DataFrame()
+        
+        try:
+            print(f"  获取ETF实时行情...")
+            df = ak.fund_etf_spot_em()
+            if not df.empty:
+                print(f"  ✅ 获取到 {len(df)} 只ETF的实时行情")
+                return df
+            else:
+                print(f"  ⚠️ ETF实时行情数据为空")
+                return pd.DataFrame()
+        except Exception as e:
+            print(f"  ⚠️ 获取ETF实时行情失败: {e}")
+            return pd.DataFrame()
+    
+    def get_etf_info(self, symbol: str) -> Dict[str, Any]:
+        """
+        获取ETF基本信息（规模、净值等）
+        
+        Args:
+            symbol: ETF代码（如 "511280"）
+        
+        Returns:
+            ETF基本信息字典
+        """
+        if not self.available:
+            return {}
+        
+        try:
+            print(f"  获取ETF {symbol} 基本信息...")
+            df = ak.fund_em_etf_info(symbol=symbol)
+            
+            info_dict = {}
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                # 转换为字典格式
+                for _, row in df.iterrows():
+                    if len(row) >= 2:
+                        key = str(row.iloc[0]) if pd.notna(row.iloc[0]) else ""
+                        value = row.iloc[1] if len(row) > 1 else ""
+                        if key and pd.notna(value):
+                            info_dict[key] = value
+                
+                if info_dict:
+                    print(f"  ✅ 获取到ETF基本信息")
+                    return info_dict
+            else:
+                print(f"  ⚠️ ETF基本信息为空")
+                return {}
+        except Exception as e:
+            print(f"  ⚠️ 获取ETF基本信息失败: {e}")
+            return {}
+    
+    def get_fund_list(self) -> pd.DataFrame:
+        """
+        获取包括ETF在内的所有基金列表及代码
+        
+        Returns:
+            基金列表 DataFrame
+        """
+        if not self.available:
+            return pd.DataFrame()
+        
+        try:
+            print(f"  获取基金列表...")
+            df = ak.fund_em_fund_name()
+            if not df.empty:
+                print(f"  ✅ 获取到 {len(df)} 只基金")
+                return df
+            else:
+                print(f"  ⚠️ 基金列表为空")
+                return pd.DataFrame()
+        except Exception as e:
+            print(f"  ⚠️ 获取基金列表失败: {e}")
+            return pd.DataFrame()
 

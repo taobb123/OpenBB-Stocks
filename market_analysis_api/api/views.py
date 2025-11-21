@@ -139,24 +139,63 @@ def analyze_custom_stocks_api(request):
         # 运行异步分析（延迟导入）
         InteractiveMarketAnalyzer = get_interactive_analyzer()
         async def run_analysis():
-            analyzer = InteractiveMarketAnalyzer(use_akshare=True)
+            analyzer = None
             try:
+                # 使用 akshare 进行分析（OpenBB SDK 已禁用，技术指标使用 akshare 数据计算）
+                analyzer = InteractiveMarketAnalyzer(use_akshare=True, use_openbb=False)
+                
+                # 执行分析
                 analysis = await analyzer.analyze_custom_stocks(
                     stock_codes,
                     market_type=market_type
                 )
-                report = analyzer.format_custom_analysis_report(analysis)
+                
+                # 生成报告（即使分析有部分错误，也尝试生成报告）
+                report = ""
+                try:
+                    report = analyzer.format_custom_analysis_report(analysis)
+                except Exception as report_error:
+                    print(f"⚠️ 生成报告时出错: {str(report_error)[:200]}")
+                    # 如果报告生成失败，创建一个简单的报告
+                    report = f"分析完成，但报告生成时出现错误: {str(report_error)[:200]}\n\n"
+                    if analysis and analysis.get("stocks"):
+                        report += f"共分析 {len(analysis.get('stocks', []))} 只股票\n"
+                        for stock in analysis.get("stocks", []):
+                            symbol = stock.get("symbol", "N/A")
+                            report += f"\n股票代码: {symbol}\n"
                 
                 # 保存买入建议到 Buy.txt（追加模式）
-                analyzer._save_buy_recommendations(analysis.get("stocks", []))
+                try:
+                    analyzer._save_buy_recommendations(analysis.get("stocks", []))
+                except Exception as save_error:
+                    print(f"⚠️ 保存买入建议时出错: {str(save_error)[:200]}")
                 
                 return {
                     'success': True,
                     'data': analysis,
                     'report': report
                 }
+            except Exception as analysis_error:
+                # 即使分析失败，也尝试返回部分结果
+                error_msg = str(analysis_error)
+                print(f"❌ 分析过程出错: {error_msg[:500]}")
+                
+                # 尝试生成错误报告
+                error_report = f"分析过程中出现错误:\n{error_msg[:500]}\n\n"
+                error_report += f"已分析的股票代码: {', '.join(stock_codes)}\n"
+                
+                return {
+                    'success': False,
+                    'error': error_msg[:500],
+                    'report': error_report,
+                    'data': None
+                }
             finally:
-                await analyzer.close()
+                if analyzer:
+                    try:
+                        await analyzer.close()
+                    except:
+                        pass
         
         # 执行异步函数
         result = asyncio.run(run_analysis())
@@ -165,9 +204,13 @@ def analyze_custom_stocks_api(request):
         return JsonResponse(result)
         
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ API 调用出错: {error_trace}")
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e)[:500],
+            'report': f'分析失败:\n{str(e)[:500]}\n\n请检查后端日志获取详细信息。'
         }, status=500)
 
 

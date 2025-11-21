@@ -39,7 +39,8 @@ function MarketAnalysisRest() {
 		!!analysisResult &&
 		(Boolean(analysisResult.report) ||
 			Boolean(analysisResult.error) ||
-			Boolean(analysisResult.data));
+			Boolean(analysisResult.data) ||
+			analysisResult.success !== undefined); // 只要有响应就显示
 
 	const handleCopy = async (text: string) => {
 		try {
@@ -121,9 +122,40 @@ function MarketAnalysisRest() {
 				}),
 			});
 
-			const analysisData: AnalysisResponse = await analyzeResponse.json();
-			setAnalysisResult(analysisData);
+			if (!analyzeResponse.ok) {
+				// 尝试解析错误响应
+				try {
+					const errorData = await analyzeResponse.json();
+					setAnalysisResult({
+						success: false,
+						error: errorData.error || `HTTP ${analyzeResponse.status}`,
+						report: errorData.report || `分析失败: HTTP ${analyzeResponse.status}`
+					});
+				} catch {
+					setError(`分析失败: HTTP ${analyzeResponse.status}`);
+				}
+			} else {
+				const analysisData: AnalysisResponse = await analyzeResponse.json();
+				
+				// 无论成功与否，都设置结果（这样报告可以显示）
+				setAnalysisResult(analysisData);
+				
+				// 如果有错误，也设置错误状态
+				if (!analysisData.success && analysisData.error) {
+					setError(analysisData.error || "分析失败");
+				} else {
+					// 清除之前的错误
+					setError(null);
+				}
+			}
 		} catch (err: any) {
+			console.error("分析错误:", err);
+			// 即使出错，也尝试显示错误信息
+			setAnalysisResult({
+				success: false,
+				error: err.message || "分析失败，请检查后端服务器是否运行",
+				report: `分析失败:\n${err.message || "请检查后端服务器是否运行"}\n\n请确保:\n1. 后端服务器正在运行\n2. API 地址正确\n3. 网络连接正常`
+			});
 			setError(err.message || "分析失败，请检查后端服务器是否运行");
 		} finally {
 			setLoading(false);
@@ -445,41 +477,68 @@ function MarketAnalysisRest() {
 							)}
 						</div>
 
-						{!hasFileReport && (
+						{loading && (
 							<div className="text-center text-gray-500 py-12">
-								使用左侧“从文件读取股票代码”并点击“开始分析”后，这里会显示结果
+								<div className="flex flex-col items-center space-y-2">
+									<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+									<p>正在分析中，请稍候...</p>
+								</div>
+							</div>
+						)}
+						
+						{!loading && !hasFileReport && (
+							<div className="text-center text-gray-500 py-12">
+								使用左侧"从文件读取股票代码"并点击"开始分析"后，这里会显示结果
 							</div>
 						)}
 
 						{analysisResult && hasFileReport && (
-							<div className="space-y-4">
-								<div className="text-right space-x-2">
-									<Button
-										variant="outline"
-										onClick={() => analysisResult.report && handleCopy(analysisResult.report)}
-										className="text-black border-gray-300 hover:bg-gray-50"
-									>
-										复制内容
-									</Button>
-									<Button
-										variant="outline"
-										onClick={() => setFileReportModalOpen(true)}
-										className="text-black border-gray-300 hover:bg-gray-50"
-									>
-										弹出查看
-									</Button>
+							<div className="space-y-4 flex flex-col h-full">
+								<div className="text-right space-x-2 flex-shrink-0">
+									{analysisResult.report && (
+										<>
+											<Button
+												variant="outline"
+												onClick={() => analysisResult.report && handleCopy(analysisResult.report)}
+												className="text-black border-gray-300 hover:bg-gray-50"
+											>
+												复制内容
+											</Button>
+											<Button
+												variant="outline"
+												onClick={() => setFileReportModalOpen(true)}
+												className="text-black border-gray-300 hover:bg-gray-50"
+											>
+												弹出查看
+											</Button>
+										</>
+									)}
 								</div>
+								
 								{analysisResult.error && (
-									<div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-										<p className="text-red-800">{analysisResult.error}</p>
+									<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 flex-shrink-0">
+										<p className="text-yellow-800 text-sm">
+											⚠️ {analysisResult.error}
+										</p>
 									</div>
 								)}
 
-								{analysisResult.report && (
-									<div className="bg-gray-50 rounded-lg p-4">
-										<pre className="whitespace-pre-wrap text-sm font-mono overflow-auto max-h-96 text-black">
+								{analysisResult.report ? (
+									<div className="bg-gray-50 rounded-lg p-4 flex-1 overflow-auto border border-gray-200">
+										<pre className="whitespace-pre-wrap text-sm font-mono text-black leading-relaxed">
 											{analysisResult.report}
 										</pre>
+									</div>
+								) : analysisResult.success === false ? (
+									<div className="bg-red-50 rounded-lg p-4 flex-1 flex items-center justify-center border border-red-200">
+										<p className="text-red-800 text-sm">
+											❌ 分析失败，无法生成报告
+											{analysisResult.error && `: ${analysisResult.error}`}
+										</p>
+									</div>
+								) : (
+									<div className="bg-gray-50 rounded-lg p-4 flex-1 flex items-center justify-center border border-gray-200">
+										<p className="text-gray-500 text-sm">报告生成中...</p>
 									</div>
 								)}
 

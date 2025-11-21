@@ -18,20 +18,38 @@ try:
 except ImportError:
     AKSHARE_AVAILABLE = False
 
+# 尝试导入 OpenBB SDK
+try:
+    from openbb import obb
+    OPENBB_SDK_AVAILABLE = True
+except ImportError:
+    try:
+        from openbb_terminal.sdk import openbb as obb
+        OPENBB_SDK_AVAILABLE = True
+    except ImportError:
+        OPENBB_SDK_AVAILABLE = False
+        obb = None
+
 
 class InteractiveMarketAnalyzer:
     """交互式市场分析器"""
     
-    def __init__(self, mcp_url: str = "http://127.0.0.1:8002/mcp", use_akshare: bool = True):
+    def __init__(self, mcp_url: str = "http://127.0.0.1:8002/mcp", use_akshare: bool = True, use_openbb: bool = False):
         """
         初始化交互式分析器
         
         Args:
             mcp_url: MCP服务器地址
             use_akshare: 是否使用 akshare
+            use_openbb: 是否使用 OpenBB SDK（默认False，因为版本不兼容）
         """
         self.analyzer = MarketStructureAnalyzer(mcp_url=mcp_url, use_akshare=use_akshare)
         self.akshare = self.analyzer.akshare if use_akshare and AKSHARE_AVAILABLE else None
+        
+        # OpenBB SDK 已禁用（版本不兼容），技术指标使用 akshare 数据计算
+        self.use_openbb = False
+        self.obb = None
+        # 注意：get_stock_technical_indicators_openbb 方法现在使用 akshare 数据，不再依赖 OpenBB SDK
     
     def _generate_report_filename(self, prefix: str = "custom_stock_analysis") -> str:
         """
@@ -58,12 +76,13 @@ class InteractiveMarketAnalyzer:
         else:
             return base_filename
     
-    def get_stock_timing_analysis(self, symbol: str) -> Dict[str, Any]:
+    def get_stock_timing_analysis(self, symbol: str, hist_data=None) -> Dict[str, Any]:
         """
         分析股票买入时机
         
         Args:
             symbol: 股票代码
+            hist_data: 可选，已获取的历史数据（避免重复获取）
         
         Returns:
             时机分析结果
@@ -72,17 +91,19 @@ class InteractiveMarketAnalyzer:
             return {"error": "AKShare 不可用"}
         
         try:
-            # 获取历史数据（最近1年）
-            end_date = datetime.now().strftime("%Y%m%d")
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            
-            hist_data = self.akshare.get_stock_historical(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                period="daily",
-                adjust="qfq"  # 前复权
-            )
+            # 如果没有提供历史数据，则获取
+            if hist_data is None or hist_data.empty:
+                # 获取历史数据（最近1年）
+                end_date = datetime.now().strftime("%Y%m%d")
+                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                
+                hist_data = self.akshare.get_stock_historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    period="daily",
+                    adjust="qfq"  # 前复权
+                )
             
             if hist_data.empty:
                 return {"error": "无法获取历史数据"}
@@ -238,53 +259,58 @@ class InteractiveMarketAnalyzer:
             timing_factors = []
             
             # 1. 均线多头排列（右侧交易核心指标）
-            ma_data = analysis["indicators"]["MA"]
-            if ma_data.get("bullish_arrangement", False):
-                timing_score += 3
-                timing_factors.append("✅ 均线多头排列，趋势强劲")
-            elif ma_data.get("trend") == "上升":
-                timing_score += 1
-                timing_factors.append("✅ 均线呈上升趋势")
-            else:
-                timing_score -= 2
-                timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
-            
-            # 2. 价格在均线之上
-            if ma_data.get("price_above_ma", False):
-                timing_score += 2
-                timing_factors.append("✅ 价格位于均线之上，处于上升通道")
-            else:
-                timing_score -= 1
-                timing_factors.append("⚠️ 价格位于均线之下，趋势偏弱")
+            if "MA" in analysis["indicators"]:
+                ma_data = analysis["indicators"]["MA"]
+                if ma_data.get("bullish_arrangement", False):
+                    timing_score += 3
+                    timing_factors.append("✅ 均线多头排列，趋势强劲")
+                elif ma_data.get("trend") == "上升":
+                    timing_score += 1
+                    timing_factors.append("✅ 均线呈上升趋势")
+                else:
+                    timing_score -= 2
+                    timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
+                
+                # 2. 价格在均线之上
+                if ma_data.get("price_above_ma", False):
+                    timing_score += 2
+                    timing_factors.append("✅ 价格位于均线之上，处于上升通道")
+                else:
+                    timing_score -= 1
+                    timing_factors.append("⚠️ 价格位于均线之下，趋势偏弱")
             
             # 3. RSI信号（右侧交易偏好强势但不超买）
-            rsi_signal = analysis["indicators"]["RSI"]["signal"]
-            rsi_value = analysis["indicators"]["RSI"]["value"]
-            if rsi_signal == "强势" and rsi_value and 50 <= rsi_value <= 70:
-                timing_score += 2
-                timing_factors.append("✅ RSI处于强势区间，动量充足")
-            elif rsi_signal == "超买":
-                timing_score -= 2
-                timing_factors.append("⚠️ RSI超买，注意回调风险")
-            elif rsi_signal == "超卖":
-                timing_score -= 2
-                timing_factors.append("❌ RSI超卖，不符合右侧交易风格")
-            elif rsi_signal == "弱势":
-                timing_score -= 1
-                timing_factors.append("⚠️ RSI偏弱，缺乏上涨动力")
+            if "RSI" in analysis["indicators"]:
+                rsi_data = analysis["indicators"]["RSI"]
+                rsi_signal = rsi_data.get("signal", "正常")
+                rsi_value = rsi_data.get("value")
+                if rsi_signal == "强势" and rsi_value and 50 <= rsi_value <= 70:
+                    timing_score += 2
+                    timing_factors.append("✅ RSI处于强势区间，动量充足")
+                elif rsi_signal == "超买":
+                    timing_score -= 2
+                    timing_factors.append("⚠️ RSI超买，注意回调风险")
+                elif rsi_signal == "超卖":
+                    timing_score -= 2
+                    timing_factors.append("❌ RSI超卖，不符合右侧交易风格")
+                elif rsi_signal == "弱势":
+                    timing_score -= 1
+                    timing_factors.append("⚠️ RSI偏弱，缺乏上涨动力")
             
             # 4. 价格位置（右侧交易偏好中高位）
-            price_signal = analysis["indicators"]["PricePosition"]["signal"]
-            position_percent = analysis["indicators"]["PricePosition"]["position_percent"]
-            if price_signal in ["中高位", "高位"] and 50 <= position_percent <= 85:
-                timing_score += 2
-                timing_factors.append("✅ 价格处于中高位，符合右侧交易")
-            elif price_signal == "极高" and position_percent > 85:
-                timing_score -= 1
-                timing_factors.append("⚠️ 价格处于极高位置，追高风险较大")
-            elif price_signal in ["低位", "中低位"]:
-                timing_score -= 2
-                timing_factors.append("❌ 价格处于低位，不符合右侧交易风格")
+            if "PricePosition" in analysis["indicators"]:
+                pos_data = analysis["indicators"]["PricePosition"]
+                price_signal = pos_data.get("signal", "中位")
+                position_percent = pos_data.get("position_percent", 50)
+                if price_signal in ["中高位", "高位"] and 50 <= position_percent <= 85:
+                    timing_score += 2
+                    timing_factors.append("✅ 价格处于中高位，符合右侧交易")
+                elif price_signal == "极高" and position_percent > 85:
+                    timing_score -= 1
+                    timing_factors.append("⚠️ 价格处于极高位置，追高风险较大")
+                elif price_signal in ["低位", "中低位"]:
+                    timing_score -= 2
+                    timing_factors.append("❌ 价格处于低位，不符合右侧交易风格")
             
             # 5. 价格突破（右侧交易关键信号）
             if "Breakthrough" in analysis["indicators"]:
@@ -307,14 +333,16 @@ class InteractiveMarketAnalyzer:
                     timing_factors.append("❌ 动量偏弱，缺乏上涨动力")
             
             # 7. 成交量（右侧交易需要放量确认）
-            volume_signal = analysis["indicators"]["Volume"]["signal"]
-            volume_ratio = analysis["indicators"]["Volume"]["ratio"]
-            if volume_signal == "放量" and volume_ratio > 1.5:
-                timing_score += 2
-                timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
-            elif volume_signal == "缩量":
-                timing_score -= 1
-                timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
+            if "Volume" in analysis["indicators"]:
+                volume_data = analysis["indicators"]["Volume"]
+                volume_signal = volume_data.get("signal", "正常")
+                volume_ratio = volume_data.get("ratio", 1)
+                if volume_signal == "放量" and volume_ratio > 1.5:
+                    timing_score += 2
+                    timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
+                elif volume_signal == "缩量":
+                    timing_score -= 1
+                    timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
             
             # 综合评分和建议（右侧交易需要更高的评分阈值）
             analysis["timing"] = {
@@ -328,12 +356,235 @@ class InteractiveMarketAnalyzer:
         except Exception as e:
             return {"error": str(e)}
     
-    def get_stock_fundamentals_akshare(self, symbol: str) -> Dict[str, Any]:
+    def get_stock_technical_indicators_openbb(self, symbol: str, hist_data=None) -> Dict[str, Any]:
+        """
+        使用 akshare 数据计算技术指标并生成右侧交易信号
+        （注意：方法名保持兼容，但实际使用 akshare 数据，不再依赖 OpenBB SDK）
+        
+        Args:
+            symbol: 股票代码
+            hist_data: 可选，已获取的历史数据（避免重复获取）
+        
+        Returns:
+            包含技术指标和交易信号的字典
+        """
+        if not self.akshare:
+            return {"error": "AKShare 不可用"}
+        
+        try:
+            # 如果没有提供历史数据，则获取
+            if hist_data is None or hist_data.empty:
+                # 获取历史数据（最近1年）
+                end_date = datetime.now().strftime("%Y%m%d")
+                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                
+                print(f"  使用 akshare 数据计算 {symbol} 技术指标...")
+                hist_data = self.akshare.get_stock_historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    period="daily",
+                    adjust="qfq"  # 前复权
+                )
+            else:
+                print(f"  使用已获取的历史数据计算 {symbol} 技术指标...")
+            
+            if hist_data.empty:
+                return {"error": "无法获取历史数据"}
+            
+            # 转换为DataFrame并标准化列名
+            import pandas as pd
+            import numpy as np
+            
+            # 标准化列名（akshare 可能使用中文列名）
+            df = hist_data.copy()
+            if "收盘" in df.columns:
+                df["close"] = df["收盘"].astype(float)
+            elif "close" not in df.columns:
+                return {"error": "无法找到收盘价数据"}
+            
+            close_prices = df["close"]
+            if len(close_prices) < 50:
+                return {"error": "历史数据不足，至少需要50个交易日"}
+            
+            # 计算技术指标
+            indicators = {}
+            signals = []
+            
+            # 1. 移动平均线（MA）- SMA50 和 SMA200
+            sma_50 = close_prices.rolling(window=50).mean()
+            sma_200 = close_prices.rolling(window=200).mean() if len(close_prices) >= 200 else None
+            
+            current_price = close_prices.iloc[-1]
+            current_sma50 = sma_50.iloc[-1]
+            current_sma200 = sma_200.iloc[-1] if sma_200 is not None and pd.notna(sma_200.iloc[-1]) else None
+            
+            # 均线交叉信号（右侧交易：短期均线上穿长期均线）
+            ma_cross_signal = False
+            if current_sma200 and len(sma_50) >= 2 and len(sma_200) >= 2:
+                ma_cross_signal = (sma_50.iloc[-1] > sma_200.iloc[-1]) and (sma_50.iloc[-2] <= sma_200.iloc[-2])
+            
+            indicators["MA"] = {
+                "SMA50": float(current_sma50) if pd.notna(current_sma50) else None,
+                "SMA200": float(current_sma200) if current_sma200 else None,
+                "price_above_sma50": current_price > current_sma50 if pd.notna(current_sma50) else False,
+                "price_above_sma200": current_price > current_sma200 if current_sma200 else False,
+                "ma_cross_signal": ma_cross_signal,
+                "trend": "上升" if (current_sma200 and current_sma50 > current_sma200) or (not current_sma200 and pd.notna(current_sma50)) else "下降" if current_sma200 else "未知"
+            }
+            
+            if ma_cross_signal:
+                signals.append("✅ 均线交叉：短期均线上穿长期均线，买入信号")
+            
+            # 2. RSI指标（使用 pandas 计算）
+            try:
+                delta = close_prices.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi = 100 - (100 / (1 + rs))
+                current_rsi = float(rsi.iloc[-1]) if pd.notna(rsi.iloc[-1]) else None
+                
+                if current_rsi is not None:
+                    # RSI信号（右侧交易：RSI在50-70区间为强势）
+                    rsi_signal = "超买" if current_rsi > 70 else \
+                               "超卖" if current_rsi < 30 else \
+                               "强势" if 50 <= current_rsi <= 70 else \
+                               "弱势" if 30 <= current_rsi < 50 else "正常"
+                    
+                    indicators["RSI"] = {
+                        "value": current_rsi,
+                        "signal": rsi_signal
+                    }
+                    
+                    # RSI超卖区回升信号（右侧交易）
+                    if current_rsi < 30 and len(rsi) >= 2:
+                        prev_rsi = rsi.iloc[-2]
+                        if pd.notna(prev_rsi) and current_rsi > prev_rsi:
+                            signals.append("✅ RSI超卖区回升：从超卖区反弹，买入信号")
+            except Exception as e:
+                print(f"  ⚠️ 计算RSI失败: {e}")
+            
+            # 3. MACD指标（使用 pandas 计算）
+            try:
+                # 计算EMA
+                ema_12 = close_prices.ewm(span=12, adjust=False).mean()
+                ema_26 = close_prices.ewm(span=26, adjust=False).mean()
+                
+                # MACD线 = EMA12 - EMA26
+                macd_line = ema_12 - ema_26
+                
+                # 信号线 = MACD的9日EMA
+                signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                
+                # 柱状图 = MACD - 信号线
+                histogram = macd_line - signal_line
+                
+                current_macd = macd_line.iloc[-1]
+                current_signal = signal_line.iloc[-1]
+                current_histogram = histogram.iloc[-1]
+                
+                # MACD交叉信号（右侧交易：MACD上穿信号线）
+                macd_cross_signal = False
+                if len(macd_line) >= 2 and len(signal_line) >= 2:
+                    macd_cross_signal = (macd_line.iloc[-1] > signal_line.iloc[-1]) and (macd_line.iloc[-2] <= signal_line.iloc[-2])
+                
+                indicators["MACD"] = {
+                    "macd": float(current_macd) if pd.notna(current_macd) else None,
+                    "signal": float(current_signal) if pd.notna(current_signal) else None,
+                    "histogram": float(current_histogram) if pd.notna(current_histogram) else None,
+                    "macd_cross_signal": macd_cross_signal
+                }
+                
+                if macd_cross_signal:
+                    signals.append("✅ MACD交叉：MACD上穿信号线，买入信号")
+            except Exception as e:
+                print(f"  ⚠️ 计算MACD失败: {e}")
+            
+            # 4. 布林带（Bollinger Bands）- 使用 pandas 计算
+            try:
+                # 计算20日移动平均线
+                sma_20 = close_prices.rolling(window=20).mean()
+                
+                # 计算20日标准差
+                std_20 = close_prices.rolling(window=20).std()
+                
+                # 上轨 = SMA20 + 2 * STD
+                upper_band = sma_20 + (2 * std_20)
+                
+                # 下轨 = SMA20 - 2 * STD
+                lower_band = sma_20 - (2 * std_20)
+                
+                current_upper = upper_band.iloc[-1]
+                current_lower = lower_band.iloc[-1]
+                current_middle = sma_20.iloc[-1]
+                
+                # 布林带信号（右侧交易：价格突破上轨）
+                bb_signal = None
+                if pd.notna(current_upper) and pd.notna(current_lower):
+                    if current_price > current_upper:
+                        bb_signal = "突破上轨"
+                    elif current_price < current_lower:
+                        bb_signal = "跌破下轨"
+                    else:
+                        bb_signal = "正常区间"
+                
+                indicators["BollingerBands"] = {
+                    "upper": float(current_upper) if pd.notna(current_upper) else None,
+                    "middle": float(current_middle) if pd.notna(current_middle) else None,
+                    "lower": float(current_lower) if pd.notna(current_lower) else None,
+                    "current_price": float(current_price),
+                    "signal": bb_signal
+                }
+                
+                if bb_signal == "突破上轨":
+                    signals.append("✅ 布林带突破：价格突破上轨，强势信号")
+            except Exception as e:
+                print(f"  ⚠️ 计算布林带失败: {e}")
+            
+            return {
+                "symbol": symbol,
+                "indicators": indicators,
+                "signals": signals,
+                "data_points": len(df),
+                "source": "akshare"  # 标记数据来源
+            }
+            
+        except Exception as e:
+            # 返回错误信息但不影响整体流程
+            error_msg = str(e)
+            return {"error": f"技术指标计算失败: {error_msg[:200]}"}
+    
+    def _convert_to_openbb_symbol(self, symbol: str) -> Optional[str]:
+        """
+        将A股代码转换为OpenBB格式
+        
+        Args:
+            symbol: A股代码（如 "600519" 或 "000001"）
+        
+        Returns:
+            OpenBB格式代码（如 "600519.SS" 或 "000001.SZ"），如果无法转换返回None
+        """
+        if not symbol or len(symbol) != 6:
+            return None
+        
+        # 上海股票（6开头）
+        if symbol.startswith("6"):
+            return f"{symbol}.SS"
+        # 深圳股票（0或3开头）
+        elif symbol.startswith("0") or symbol.startswith("3"):
+            return f"{symbol}.SZ"
+        else:
+            return None
+    
+    def get_stock_fundamentals_akshare(self, symbol: str, stock_info=None, hist_data=None) -> Dict[str, Any]:
         """
         使用 akshare 获取股票基本面数据
         
         Args:
             symbol: 股票代码
+            stock_info: 可选，已获取的股票基本信息（避免重复获取）
+            hist_data: 可选，已获取的历史数据（避免重复获取）
         
         Returns:
             基本面数据
@@ -342,20 +593,24 @@ class InteractiveMarketAnalyzer:
             return {"error": "AKShare 不可用"}
         
         try:
-            # 获取基本信息
-            info = self.akshare.get_stock_info(symbol)
+            # 如果没有提供基本信息，则获取
+            if stock_info is None:
+                info = self.akshare.get_stock_info(symbol)
+            else:
+                info = stock_info
             
             # 获取基本面数据
             fundamentals = self.akshare.get_stock_fundamentals(symbol)
             
-            # 获取历史数据用于计算
-            end_date = datetime.now().strftime("%Y%m%d")
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            hist_data = self.akshare.get_stock_historical(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date
-            )
+            # 如果没有提供历史数据，则获取（用于计算）
+            if hist_data is None or hist_data.empty:
+                end_date = datetime.now().strftime("%Y%m%d")
+                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                hist_data = self.akshare.get_stock_historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date
+                )
             
             result = {
                 "symbol": symbol,
@@ -408,96 +663,141 @@ class InteractiveMarketAnalyzer:
                 "profile": {}
             }
             
-            # 1. 时机分析
+            # 预先获取一次历史数据和基本信息，避免重复获取
+            hist_data = None
+            stock_info = None
             if self.akshare:
-                print(f"  ⏰ 分析买入时机...")
+                # 获取历史数据（所有分析方法都需要）
+                end_date = datetime.now().strftime("%Y%m%d")
+                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                print(f"  📥 获取历史数据...")
+                hist_data = self.akshare.get_stock_historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    period="daily",
+                    adjust="qfq"
+                )
+                if not hist_data.empty:
+                    print(f"    ✅ 获取到 {len(hist_data)} 条历史数据")
+                
+                # 获取基本信息（只获取一次）
+                print(f"  📋 获取股票基本信息...")
+                stock_info = self.akshare.get_stock_info(symbol)
+                if stock_info:
+                    print(f"    ✅ 获取到基本信息")
+                    stock_analysis["profile"] = {
+                        "info": stock_info,
+                        "name": stock_info.get("股票简称", stock_info.get("名称", symbol)),
+                        "industry": stock_info.get("所属行业", stock_info.get("行业", "N/A")),
+                        "concept": stock_info.get("概念板块", "N/A")
+                    }
+                    print(f"    股票名称: {stock_analysis['profile'].get('name', 'N/A')}")
+                    print(f"    所属行业: {stock_analysis['profile'].get('industry', 'N/A')}")
+            
+            # 1. 时机分析（使用 akshare，复用历史数据）
+            if self.akshare and hist_data is not None and not hist_data.empty:
+                print(f"  ⏰ 分析买入时机（akshare）...")
+                timing = self.get_stock_timing_analysis(symbol, hist_data=hist_data)
+                stock_analysis["timing"] = timing
+            elif self.akshare:
+                print(f"  ⏰ 分析买入时机（akshare）...")
                 timing = self.get_stock_timing_analysis(symbol)
                 stock_analysis["timing"] = timing
-                
-                if "timing" in timing:
-                    rec = timing["timing"]["recommendation"]
-                    score = timing["timing"]["score"]
-                    print(f"    时机评分: {score}, 建议: {rec}")
-                    
-                    # 显示详细的技术指标
-                    indicators = timing.get("indicators", {})
-                    if indicators:
-                        print(f"    📊 技术指标:")
-                        
-                        # 均线指标
-                        if "MA" in indicators:
-                            ma = indicators["MA"]
-                            ma_str = f"      均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
-                            if ma.get('MA60'):
-                                ma_str += f", MA60={ma.get('MA60', 0):.2f}"
-                            ma_str += f", 趋势={ma.get('trend', 'N/A')}"
-                            if ma.get('bullish_arrangement'):
-                                ma_str += " ✅多头排列"
-                            if ma.get('price_above_ma'):
-                                ma_str += " ✅价格在均线之上"
-                            print(ma_str)
-                        
-                        # RSI指标
-                        if "RSI" in indicators:
-                            rsi = indicators["RSI"]
-                            rsi_value = rsi.get('value', 0)
-                            rsi_signal = rsi.get('signal', 'N/A')
-                            print(f"      RSI: {rsi_value:.2f} ({rsi_signal})")
-                        
-                        # 价格位置
-                        if "PricePosition" in indicators:
-                            pos = indicators["PricePosition"]
-                            position_pct = pos.get('position_percent', 0)
-                            pos_signal = pos.get('signal', 'N/A')
-                            current_price = pos.get('current', 0)
-                            print(f"      价格位置: {current_price:.2f} ({position_pct:.1f}%, {pos_signal})")
-                        
-                        # 突破分析
-                        if "Breakthrough" in indicators:
-                            bt = indicators["Breakthrough"]
-                            if bt.get('breakthrough_60d'):
-                                print(f"      突破: ✅突破60日高点")
-                            elif bt.get('breakthrough_20d'):
-                                print(f"      突破: ✅突破20日高点")
-                            else:
-                                print(f"      突破: 未突破近期高点")
-                        
-                        # 动量指标
-                        if "Momentum" in indicators:
-                            mom = indicators["Momentum"]
-                            momentum_5d = mom.get('momentum_5d', 0)
-                            momentum_20d = mom.get('momentum_20d', 0)
-                            mom_signal = mom.get('signal', 'N/A')
-                            print(f"      动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal})")
-                        
-                        # 成交量
-                        if "Volume" in indicators:
-                            vol = indicators["Volume"]
-                            volume_ratio = vol.get('ratio', 1)
-                            vol_signal = vol.get('signal', 'N/A')
-                            print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
-                
-                elif "error" in timing:
-                    print(f"    ⚠️ 时机分析失败: {timing['error']}")
             
-            # 2. 基本面分析
+            # 1.5. 技术指标分析（使用 akshare 数据，复用历史数据）
+            if self.akshare and hist_data is not None and not hist_data.empty:
+                print(f"  📊 计算技术指标（MACD、布林带等）...")
+                technical_analysis = self.get_stock_technical_indicators_openbb(symbol, hist_data=hist_data)
+                if "error" not in technical_analysis:
+                    stock_analysis["openbb_indicators"] = technical_analysis  # 保持字段名兼容
+                    if technical_analysis.get("signals"):
+                        print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
+                else:
+                    print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
+            elif self.akshare:
+                print(f"  📊 计算技术指标（MACD、布林带等）...")
+                technical_analysis = self.get_stock_technical_indicators_openbb(symbol)
+                if "error" not in technical_analysis:
+                    stock_analysis["openbb_indicators"] = technical_analysis
+                    if technical_analysis.get("signals"):
+                        print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
+                else:
+                    print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
+            
+            # 显示时机分析结果
+            timing = stock_analysis.get("timing", {})
+            if "timing" in timing:
+                rec = timing["timing"]["recommendation"]
+                score = timing["timing"]["score"]
+                print(f"    时机评分: {score}, 建议: {rec}")
+                
+                # 显示详细的技术指标
+                indicators = timing.get("indicators", {})
+                if indicators:
+                    print(f"    📊 技术指标:")
+                    
+                    # 均线指标
+                    if "MA" in indicators:
+                        ma = indicators["MA"]
+                        ma_str = f"      均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
+                        if ma.get('MA60'):
+                            ma_str += f", MA60={ma.get('MA60', 0):.2f}"
+                        ma_str += f", 趋势={ma.get('trend', 'N/A')}"
+                        if ma.get('bullish_arrangement'):
+                            ma_str += " ✅多头排列"
+                        if ma.get('price_above_ma'):
+                            ma_str += " ✅价格在均线之上"
+                        print(ma_str)
+                    
+                    # RSI指标
+                    if "RSI" in indicators:
+                        rsi = indicators["RSI"]
+                        rsi_value = rsi.get('value', 0)
+                        rsi_signal = rsi.get('signal', 'N/A')
+                        print(f"      RSI: {rsi_value:.2f} ({rsi_signal})")
+                    
+                    # 价格位置
+                    if "PricePosition" in indicators:
+                        pos = indicators["PricePosition"]
+                        position_pct = pos.get('position_percent', 0)
+                        pos_signal = pos.get('signal', 'N/A')
+                        current_price = pos.get('current', 0)
+                        print(f"      价格位置: {current_price:.2f} ({position_pct:.1f}%, {pos_signal})")
+                    
+                    # 突破分析
+                    if "Breakthrough" in indicators:
+                        bt = indicators["Breakthrough"]
+                        if bt.get('breakthrough_60d'):
+                            print(f"      突破: ✅突破60日高点")
+                        elif bt.get('breakthrough_20d'):
+                            print(f"      突破: ✅突破20日高点")
+                        else:
+                            print(f"      突破: 未突破近期高点")
+                    
+                    # 动量指标
+                    if "Momentum" in indicators:
+                        mom = indicators["Momentum"]
+                        momentum_5d = mom.get('momentum_5d', 0)
+                        momentum_20d = mom.get('momentum_20d', 0)
+                        mom_signal = mom.get('signal', 'N/A')
+                        print(f"      动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal})")
+                    
+                    # 成交量
+                    if "Volume" in indicators:
+                        vol = indicators["Volume"]
+                        volume_ratio = vol.get('ratio', 1)
+                        vol_signal = vol.get('signal', 'N/A')
+                        print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
+            
+            elif "error" in timing:
+                print(f"    ⚠️ 时机分析失败: {timing['error']}")
+            
+            # 2. 基本面分析（复用已获取的基本信息和历史数据）
             if self.akshare:
                 print(f"  📈 获取基本面数据...")
-                fundamentals = self.get_stock_fundamentals_akshare(symbol)
+                fundamentals = self.get_stock_fundamentals_akshare(symbol, stock_info=stock_info, hist_data=hist_data)
                 stock_analysis["fundamentals"] = fundamentals
-            
-            # 3. 获取股票简介（已忽略，跳过获取概念板块信息）
-            # 注意：此步骤已禁用，不再获取股票简介和概念板块信息
-            # try:
-            #     profile = await self.analyzer.get_stock_profile(
-            #         symbol,
-            #         provider="yfinance" if market_type == "A股" else "fmp",
-            #         market_type=market_type
-            #     )
-            #     stock_analysis["profile"] = profile
-            # except:
-            #     pass
-            stock_analysis["profile"] = {}  # 设置为空字典，保持数据结构一致
             
             results["stocks"].append(stock_analysis)
             print()
@@ -523,73 +823,148 @@ class InteractiveMarketAnalyzer:
         
         for stock in analysis.get("stocks", []):
             symbol = stock.get("symbol", "N/A")
+            
+            # 获取股票基本信息
+            profile = stock.get("profile", {})
+            stock_name = profile.get("name", symbol) if isinstance(profile, dict) else symbol
+            industry = profile.get("industry", "N/A") if isinstance(profile, dict) else "N/A"
+            
             report.append(f"\n股票代码: {symbol}")
+            if stock_name and stock_name != symbol:
+                report.append(f"股票名称: {stock_name}")
+            if industry and industry != "N/A":
+                report.append(f"所属行业: {industry}")
             report.append("-"*60)
             
             # 时机分析
             timing = stock.get("timing", {})
-            if timing and "timing" in timing:
-                timing_info = timing["timing"]
-                report.append(f"\n⏰ 买入时机分析:")
-                report.append(f"  综合评分: {timing_info.get('score', 0)}")
-                report.append(f"  建议: {timing_info.get('recommendation', 'N/A')}")
-                report.append(f"\n  关键因素:")
-                for factor in timing_info.get("factors", []):
-                    report.append(f"    {factor}")
-                
-                # 技术指标（右侧交易风格）
-                indicators = timing.get("indicators", {})
-                if indicators:
-                    report.append(f"\n  技术指标（右侧交易）:")
-                    if "MA" in indicators:
-                        ma = indicators["MA"]
-                        ma_str = f"    均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
-                        if ma.get('MA60'):
-                            ma_str += f", MA60={ma.get('MA60', 0):.2f}"
-                        ma_str += f", 趋势={ma.get('trend', 'N/A')}"
-                        if ma.get('bullish_arrangement'):
-                            ma_str += ", 多头排列✅"
-                        if ma.get('price_above_ma'):
-                            ma_str += ", 价格在均线之上✅"
-                        report.append(ma_str)
-                    if "RSI" in indicators:
-                        rsi = indicators["RSI"]
-                        report.append(f"    RSI: {rsi.get('value', 0):.2f} ({rsi.get('signal', 'N/A')})")
-                    if "PricePosition" in indicators:
-                        pos = indicators["PricePosition"]
-                        report.append(f"    价格位置: {pos.get('position_percent', 0):.1f}% ({pos.get('signal', 'N/A')})")
-                    if "Breakthrough" in indicators:
-                        bt = indicators["Breakthrough"]
-                        bt_str = "    突破: "
-                        if bt.get('breakthrough_60d'):
-                            bt_str += "突破60日高点✅"
-                        elif bt.get('breakthrough_20d'):
-                            bt_str += "突破20日高点✅"
-                        else:
-                            bt_str += "未突破近期高点"
-                        report.append(bt_str)
-                    if "Momentum" in indicators:
-                        mom = indicators["Momentum"]
-                        report.append(f"    动量: 5日={mom.get('momentum_5d', 0):.2f}%, 20日={mom.get('momentum_20d', 0):.2f}% ({mom.get('signal', 'N/A')})")
+            if timing:
+                if "timing" in timing:
+                    timing_info = timing["timing"]
+                    report.append(f"\n⏰ 买入时机分析:")
+                    report.append(f"  综合评分: {timing_info.get('score', 0)}")
+                    report.append(f"  建议: {timing_info.get('recommendation', 'N/A')}")
+                    
+                    # 关键因素
+                    factors = timing_info.get("factors", [])
+                    if factors:
+                        report.append(f"\n  关键因素:")
+                        for factor in factors:
+                            report.append(f"    {factor}")
+                    else:
+                        report.append(f"\n  关键因素: 暂无")
+                    
+                    # 技术指标（右侧交易风格）
+                    indicators = timing.get("indicators", {})
+                    if indicators:
+                        report.append(f"\n  技术指标（右侧交易）:")
+                        if "MA" in indicators:
+                            ma = indicators["MA"]
+                            ma_str = f"    均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
+                            if ma.get('MA60'):
+                                ma_str += f", MA60={ma.get('MA60', 0):.2f}"
+                            ma_str += f", 趋势={ma.get('trend', 'N/A')}"
+                            if ma.get('bullish_arrangement'):
+                                ma_str += ", 多头排列✅"
+                            if ma.get('price_above_ma'):
+                                ma_str += ", 价格在均线之上✅"
+                            report.append(ma_str)
+                        if "RSI" in indicators:
+                            rsi = indicators["RSI"]
+                            rsi_value = rsi.get('value')
+                            if rsi_value is not None:
+                                report.append(f"    RSI: {rsi_value:.2f} ({rsi.get('signal', 'N/A')})")
+                        if "PricePosition" in indicators:
+                            pos = indicators["PricePosition"]
+                            position_pct = pos.get('position_percent')
+                            if position_pct is not None:
+                                report.append(f"    价格位置: {position_pct:.1f}% ({pos.get('signal', 'N/A')})")
+                        if "Breakthrough" in indicators:
+                            bt = indicators["Breakthrough"]
+                            bt_str = "    突破: "
+                            if bt.get('breakthrough_60d'):
+                                bt_str += "突破60日高点✅"
+                            elif bt.get('breakthrough_20d'):
+                                bt_str += "突破20日高点✅"
+                            else:
+                                bt_str += "未突破近期高点"
+                            report.append(bt_str)
+                        # 动量指标（在技术指标部分之前获取，以便后续使用）
+                        momentum_5d = None
+                        momentum_20d = None
+                        mom_signal = None
+                        if "Momentum" in indicators:
+                            mom = indicators["Momentum"]
+                            momentum_5d = mom.get('momentum_5d')
+                            momentum_20d = mom.get('momentum_20d')
+                            mom_signal = mom.get('signal', 'N/A')
+                    
+                    # 技术指标（MACD、布林带等，使用 akshare 数据计算）
+                    openbb_indicators = stock.get("openbb_indicators", {})
+                    if openbb_indicators and "indicators" in openbb_indicators:
+                        report.append(f"\n  📊 技术指标（MACD、布林带等）:")
+                        tech_indicators = openbb_indicators["indicators"]
+                        
+                        # MACD
+                        if "MACD" in tech_indicators:
+                            macd = tech_indicators["MACD"]
+                            macd_str = f"    MACD: {macd.get('macd', 0):.4f}, 信号线: {macd.get('signal', 0):.4f}"
+                            if macd.get('macd_cross_signal'):
+                                macd_str += " ✅MACD上穿信号线"
+                            report.append(macd_str)
+                        
+                        # 布林带
+                        if "BollingerBands" in tech_indicators:
+                            bb = tech_indicators["BollingerBands"]
+                            bb_str = f"    布林带: 上轨={bb.get('upper', 0):.2f}, 中轨={bb.get('middle', 0):.2f}, 下轨={bb.get('lower', 0):.2f}, 当前={bb.get('current_price', 0):.2f}"
+                            if bb.get('signal') == "突破上轨":
+                                bb_str += " ✅突破上轨"
+                            report.append(bb_str)
+                        
+                        # 均线（SMA50/SMA200）
+                        if "MA" in tech_indicators:
+                            tech_ma = tech_indicators["MA"]
+                            ma_str = f"    均线: SMA50={tech_ma.get('SMA50', 0):.2f}"
+                            if tech_ma.get('SMA200'):
+                                ma_str += f", SMA200={tech_ma.get('SMA200', 0):.2f}"
+                            if tech_ma.get('ma_cross_signal'):
+                                ma_str += " ✅均线交叉"
+                            report.append(ma_str)
+                        
+                        # 交易信号
+                        if openbb_indicators.get("signals"):
+                            report.append(f"\n  🎯 交易信号:")
+                            for signal in openbb_indicators["signals"]:
+                                report.append(f"    {signal}")
+                        
+                        # 动量指标（如果之前获取了）
+                        if momentum_5d is not None and momentum_20d is not None:
+                            report.append(f"    动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal or 'N/A'})")
+                    
+                    # 成交量（从 timing indicators 中获取）
                     if "Volume" in indicators:
                         vol = indicators["Volume"]
-                        report.append(f"    成交量: 量比={vol.get('ratio', 1):.2f} ({vol.get('signal', 'N/A')})")
-            
-            # 基本面
-            fundamentals = stock.get("fundamentals", {})
-            if fundamentals and "fundamentals" in fundamentals:
-                fund_data = fundamentals["fundamentals"]
-                report.append(f"\n📊 基本面数据:")
-                for key, value in fund_data.items():
-                    if value:
-                        report.append(f"    {key}: {value}")
+                        volume_ratio = vol.get('ratio')
+                        if volume_ratio is not None:
+                            report.append(f"    成交量: 量比={volume_ratio:.2f} ({vol.get('signal', 'N/A')})")
+                    else:
+                        report.append(f"\n  技术指标: 数据获取失败")
+                elif "error" in timing:
+                    report.append(f"\n⏰ 买入时机分析:")
+                    report.append(f"  ⚠️ 分析失败: {timing.get('error', '未知错误')}")
+                else:
+                    report.append(f"\n⏰ 买入时机分析:")
+                    report.append(f"  ⚠️ 数据不完整，无法进行分析")
             
             # 价格信息
+            fundamentals = stock.get("fundamentals", {})
             if fundamentals and "price_data" in fundamentals:
                 price_data = fundamentals["price_data"]
-                if price_data.get("current"):
+                if price_data and price_data.get("current"):
                     report.append(f"\n💰 价格信息:")
-                    report.append(f"    当前价: {price_data.get('current', 0):.2f}")
+                    current_price = price_data.get("current")
+                    if current_price:
+                        report.append(f"    当前价: {current_price:.2f}")
                     if price_data.get("high_52w"):
                         report.append(f"    52周最高: {price_data.get('high_52w', 0):.2f}")
                     if price_data.get("low_52w"):
@@ -607,6 +982,14 @@ class InteractiveMarketAnalyzer:
         report.append("6. 风险提示与触发点")
         report.append("-"*60)
         report.append(self._format_risk_warnings())
+        report.append("")
+        
+        # 添加买入理由汇总（右侧交易策略筛选）
+        report.append("="*60)
+        report.append("7. 买入理由汇总（右侧交易策略）")
+        report.append("-"*60)
+        buy_reasons = self._format_buy_reasons_summary(analysis.get("stocks", []))
+        report.append(buy_reasons)
         report.append("")
         
         report.append("="*60)
@@ -721,6 +1104,167 @@ class InteractiveMarketAnalyzer:
         
         return result
     
+    def _format_buy_reasons_summary(self, stocks: List[Dict[str, Any]]) -> str:
+        """
+        生成买入理由汇总（右侧交易策略筛选）
+        
+        Args:
+            stocks: 股票分析结果列表
+        
+        Returns:
+            买入理由汇总文本
+        """
+        buy_stocks = []
+        
+        for stock in stocks:
+            symbol = stock.get("symbol", "")
+            profile = stock.get("profile", {})
+            stock_name = profile.get("name", symbol) if isinstance(profile, dict) else symbol
+            
+            # 收集买入理由
+            buy_reasons = []
+            timing_score = 0
+            
+            # 1. 时机分析评分
+            timing = stock.get("timing", {})
+            if "timing" in timing:
+                timing_info = timing["timing"]
+                timing_score = timing_info.get("score", 0)
+                recommendation = timing_info.get("recommendation", "")
+                
+                if recommendation == "买入" and timing_score >= 6:
+                    buy_reasons.append(f"时机评分: {timing_score} (买入建议)")
+                    
+                    # 添加关键因素
+                    factors = timing_info.get("factors", [])
+                    for factor in factors:
+                        if "✅" in factor or "强势" in factor or "突破" in factor:
+                            buy_reasons.append(factor)
+            
+            # 2. OpenBB 技术指标信号
+            openbb_indicators = stock.get("openbb_indicators", {})
+            if openbb_indicators and "signals" in openbb_indicators:
+                for signal in openbb_indicators["signals"]:
+                    if "✅" in signal:
+                        buy_reasons.append(f"OpenBB信号: {signal}")
+            
+            # 3. 右侧交易策略筛选条件
+            # 条件1: 均线多头排列
+            ma_bullish = False
+            if "timing" in timing and "indicators" in timing:
+                ma_data = timing["indicators"].get("MA", {})
+                if ma_data.get("bullish_arrangement", False):
+                    ma_bullish = True
+                    buy_reasons.append("✅ 均线多头排列")
+            
+            # 条件2: 价格在均线之上
+            price_above_ma = False
+            if "timing" in timing and "indicators" in timing:
+                ma_data = timing["indicators"].get("MA", {})
+                if ma_data.get("price_above_ma", False):
+                    price_above_ma = True
+                    buy_reasons.append("✅ 价格位于均线之上")
+            
+            # 条件3: RSI强势（50-70区间）
+            rsi_strong = False
+            if "timing" in timing and "indicators" in timing:
+                rsi_data = timing["indicators"].get("RSI", {})
+                rsi_value = rsi_data.get("value")
+                if rsi_value and 50 <= rsi_value <= 70:
+                    rsi_strong = True
+                    buy_reasons.append(f"✅ RSI处于强势区间 ({rsi_value:.2f})")
+            
+            # 条件4: 价格位置中高位（50%-85%）
+            price_position_ok = False
+            if "timing" in timing and "indicators" in timing:
+                pos_data = timing["indicators"].get("PricePosition", {})
+                position_percent = pos_data.get("position_percent", 0)
+                if 50 <= position_percent <= 85:
+                    price_position_ok = True
+                    buy_reasons.append(f"✅ 价格处于中高位 ({position_percent:.1f}%)")
+            
+            # 条件5: 突破信号
+            breakthrough = False
+            if "timing" in timing and "indicators" in timing:
+                bt_data = timing["indicators"].get("Breakthrough", {})
+                if bt_data.get("breakthrough_60d", False) or bt_data.get("breakthrough_20d", False):
+                    breakthrough = True
+                    if bt_data.get("breakthrough_60d"):
+                        buy_reasons.append("✅ 突破60日高点")
+                    elif bt_data.get("breakthrough_20d"):
+                        buy_reasons.append("✅ 突破20日高点")
+            
+            # 条件6: 动量强劲
+            momentum_strong = False
+            if "timing" in timing and "indicators" in timing:
+                mom_data = timing["indicators"].get("Momentum", {})
+                if mom_data.get("signal") == "强势":
+                    momentum_strong = True
+                    momentum_5d = mom_data.get("momentum_5d")
+                    momentum_20d = mom_data.get("momentum_20d")
+                    # 确保值不为 None
+                    if momentum_5d is not None and momentum_20d is not None:
+                        buy_reasons.append(f"✅ 动量强劲 (5日: {momentum_5d:.2f}%, 20日: {momentum_20d:.2f}%)")
+                    else:
+                        buy_reasons.append("✅ 动量强劲")
+            
+            # 条件7: 成交量放大
+            volume_ok = False
+            volume_ratio = 1.0  # 初始化默认值
+            if "timing" in timing and "indicators" in timing:
+                vol_data = timing["indicators"].get("Volume", {})
+                volume_ratio = vol_data.get("ratio")
+                if volume_ratio is None:
+                    volume_ratio = 1.0
+                if volume_ratio > 1.5:
+                    volume_ok = True
+                    buy_reasons.append(f"✅ 成交量放大 ({volume_ratio:.2f}倍)")
+            
+            # 右侧交易策略筛选：至少满足3个条件，且时机评分>=6
+            right_side_conditions = sum([
+                ma_bullish,
+                price_above_ma,
+                rsi_strong,
+                price_position_ok,
+                breakthrough,
+                momentum_strong,
+                volume_ok
+            ])
+            
+            if right_side_conditions >= 3 and timing_score >= 6:
+                buy_stocks.append({
+                    "symbol": symbol,
+                    "name": stock_name,
+                    "reasons": buy_reasons,
+                    "score": timing_score,
+                    "conditions_met": right_side_conditions
+                })
+        
+        # 格式化输出
+        if not buy_stocks:
+            return "暂无符合右侧交易策略的股票。\n\n右侧交易策略筛选条件：\n" \
+                   "- 均线多头排列\n" \
+                   "- 价格位于均线之上\n" \
+                   "- RSI处于强势区间（50-70）\n" \
+                   "- 价格处于中高位（50%-85%）\n" \
+                   "- 突破近期高点\n" \
+                   "- 动量强劲\n" \
+                   "- 成交量放大\n" \
+                   "- 时机评分 >= 6\n" \
+                   "- 至少满足3个条件"
+        
+        result = f"共筛选出 {len(buy_stocks)} 只符合右侧交易策略的股票：\n\n"
+        
+        for i, stock in enumerate(buy_stocks, 1):
+            result += f"{i}. {stock['symbol']} ({stock['name']})\n"
+            result += f"   时机评分: {stock['score']}, 满足条件数: {stock['conditions_met']}/7\n"
+            result += f"   买入理由:\n"
+            for reason in stock['reasons']:
+                result += f"     {reason}\n"
+            result += "\n"
+        
+        return result
+    
     def _format_risk_warnings(self) -> str:
         """
         格式化风险提示与触发点
@@ -744,7 +1288,7 @@ class InteractiveMarketAnalyzer:
     
     def _save_buy_recommendations(self, stocks: List[Dict[str, Any]]) -> None:
         """
-        将买入建议的分析统计保存到 Buy.txt 文件（追加模式）
+        将符合右侧交易策略的买入股票保存到 Buy.txt 文件（追加模式）
         
         Args:
             stocks: 股票分析结果列表
@@ -752,62 +1296,135 @@ class InteractiveMarketAnalyzer:
         if not stocks:
             return
         
-        # 收集买入建议股票的信息
+        # 收集符合右侧交易策略的买入股票信息
         buy_stocks_info = []
         
         for stock in stocks:
+            symbol = stock.get("symbol", "")
+            profile = stock.get("profile", {})
+            stock_name = profile.get("name", symbol) if isinstance(profile, dict) else symbol
+            
             timing = stock.get("timing", {})
             if timing and "timing" in timing:
                 timing_info = timing["timing"]
                 recommendation = timing_info.get("recommendation", "观望")
+                timing_score = timing_info.get("score", 0)
                 
-                if recommendation == "买入":
-                    symbol = stock.get("symbol", "N/A")
-                    factors = timing_info.get("factors", [])
-                    score = timing_info.get("score", 0)
+                # 右侧交易策略筛选条件
+                ma_bullish = False
+                price_above_ma = False
+                rsi_strong = False
+                price_position_ok = False
+                breakthrough = False
+                momentum_strong = False
+                volume_ok = False
+                volume_ratio = 1.0  # 初始化默认值
+                rsi_value = None
+                position_percent = None
+                bt_data = {}
+                mom_data = {}
+                vol_data = {}
+                
+                if "indicators" in timing:
+                    indicators = timing["indicators"]
+                    
+                    # 检查各项条件
+                    ma_data = indicators.get("MA", {})
+                    ma_bullish = ma_data.get("bullish_arrangement", False)
+                    price_above_ma = ma_data.get("price_above_ma", False)
+                    
+                    rsi_data = indicators.get("RSI", {})
+                    rsi_value = rsi_data.get("value")
+                    rsi_strong = rsi_value and 50 <= rsi_value <= 70
+                    
+                    pos_data = indicators.get("PricePosition", {})
+                    position_percent = pos_data.get("position_percent", 0)
+                    price_position_ok = 50 <= position_percent <= 85
+                    
+                    bt_data = indicators.get("Breakthrough", {})
+                    breakthrough = bt_data.get("breakthrough_60d", False) or bt_data.get("breakthrough_20d", False)
+                    
+                    mom_data = indicators.get("Momentum", {})
+                    momentum_strong = mom_data.get("signal") == "强势"
+                    
+                    vol_data = indicators.get("Volume", {})
+                    volume_ratio = vol_data.get("ratio")
+                    if volume_ratio is None:
+                        volume_ratio = 1.0
+                    volume_ok = volume_ratio > 1.5
+                
+                # 右侧交易策略筛选：至少满足3个条件，且时机评分>=6
+                right_side_conditions = sum([
+                    ma_bullish,
+                    price_above_ma,
+                    rsi_strong,
+                    price_position_ok,
+                    breakthrough,
+                    momentum_strong,
+                    volume_ok
+                ])
+                
+                # 只保存符合右侧交易策略的股票
+                if right_side_conditions >= 3 and timing_score >= 6:
+                    # 收集买入理由
+                    buy_reasons = []
+                    if ma_bullish:
+                        buy_reasons.append("均线多头排列")
+                    if price_above_ma:
+                        buy_reasons.append("价格位于均线之上")
+                    if rsi_strong and rsi_value is not None:
+                        buy_reasons.append(f"RSI处于强势区间 ({rsi_value:.2f})")
+                    if price_position_ok and position_percent is not None:
+                        buy_reasons.append(f"价格处于中高位 ({position_percent:.1f}%)")
+                    if breakthrough:
+                        if bt_data.get("breakthrough_60d"):
+                            buy_reasons.append("突破60日高点")
+                        elif bt_data.get("breakthrough_20d"):
+                            buy_reasons.append("突破20日高点")
+                    if momentum_strong:
+                        momentum_5d = mom_data.get("momentum_5d")
+                        momentum_20d = mom_data.get("momentum_20d")
+                        if momentum_5d is not None and momentum_20d is not None:
+                            buy_reasons.append(f"动量强劲 (5日: {momentum_5d:.2f}%, 20日: {momentum_20d:.2f}%)")
+                        else:
+                            buy_reasons.append("动量强劲")
+                    if volume_ok:
+                        # volume_ratio 已在上面初始化，确保不为 None
+                        if volume_ratio is None:
+                            volume_ratio = 1.0
+                        buy_reasons.append(f"成交量放大 ({volume_ratio:.2f}倍)")
+                    
                     buy_stocks_info.append({
                         "symbol": symbol,
-                        "factors": factors,
-                        "score": score
+                        "name": stock_name,
+                        "score": timing_score,
+                        "reasons": buy_reasons,
+                        "conditions_met": right_side_conditions
                     })
         
-        # 如果没有买入建议，不保存
-        if not buy_stocks_info:
-            return
-        
-        # 格式化买入建议信息
-        buy_info = []
-        buy_info.append("="*60)
-        buy_info.append(f"买入建议统计 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        buy_info.append("="*60)
-        buy_info.append(f"买入建议: {len(buy_stocks_info)} 只\n")
-        
-        for stock_info in buy_stocks_info:
-            symbol = stock_info["symbol"]
-            factors = stock_info["factors"]
-            score = stock_info["score"]
-            buy_info.append(f"{symbol} (评分: {score}):")
-            if factors:
-                for factor in factors:
-                    buy_info.append(f"  - {factor}")
-            else:
-                buy_info.append("  - 无关键因素")
-            buy_info.append("")
-        
-        buy_info.append("="*60)
-        buy_info.append("")
-        
-        # 追加保存到 Buy.txt 文件（保存在项目根目录）
-        try:
-            # 获取项目根目录（interactive_analysis.py 所在目录）
-            project_root = os.path.dirname(os.path.abspath(__file__))
-            buy_file_path = os.path.join(project_root, "Buy.txt")
-            
-            with open(buy_file_path, "a", encoding="utf-8") as f:
-                f.write("\n".join(buy_info))
-            print(f"✅ 买入建议已追加保存到: {buy_file_path}")
-        except Exception as e:
-            print(f"⚠️ 保存买入建议到 Buy.txt 时出错: {e}")
+        # 保存到 Buy.txt 文件（追加模式）
+        if buy_stocks_info:
+            try:
+                with open("Buy.txt", "a", encoding="utf-8") as f:
+                    f.write(f"\n{'='*60}\n")
+                    f.write(f"买入股票记录 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"{'='*60}\n\n")
+                    
+                    for stock_info in buy_stocks_info:
+                        f.write(f"股票代码: {stock_info['symbol']}\n")
+                        f.write(f"股票名称: {stock_info['name']}\n")
+                        f.write(f"时机评分: {stock_info['score']}\n")
+                        f.write(f"满足条件数: {stock_info['conditions_met']}/7\n")
+                        f.write(f"买入理由:\n")
+                        for reason in stock_info['reasons']:
+                            f.write(f"  - {reason}\n")
+                        f.write("\n")
+                    
+                    f.write(f"{'='*60}\n\n")
+                
+                print(f"  ✅ 已将 {len(buy_stocks_info)} 只符合右侧交易策略的股票追加到 Buy.txt")
+            except Exception as e:
+                print(f"  ⚠️ 保存买入建议失败: {e}")
     
     async def interactive_workflow(self):
         """
