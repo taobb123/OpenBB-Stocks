@@ -105,7 +105,11 @@ function MarketAnalysisRest() {
 
 		try {
 			// 步骤1：提取股票代码
-			const extractResponse = await fetch(`${API_BASE_URL}/extract-stock-codes/`, {
+			// 确保 URL 格式正确
+			const extractUrl = `${API_BASE_URL}/extract-stock-codes/`.replace(/\/+/g, '/').replace(':/', '://');
+			console.log(`提取股票代码 URL: ${extractUrl}`);
+			
+			const extractResponse = await fetch(extractUrl, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ content: fileContent }),

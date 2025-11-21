@@ -37,7 +37,8 @@ class MarketStructureAnalyzer:
             use_akshare: 是否优先使用 akshare 作为 A 股数据源
         """
         self.mcp_url = mcp_url
-        self.client = httpx.AsyncClient(timeout=30.0)
+        # 减少超时时间：从30秒减少到8秒，避免长时间等待
+        self.client = httpx.AsyncClient(timeout=8.0)
         self.session_id = None
         self._session_initialized = False
         

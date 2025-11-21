@@ -597,26 +597,51 @@ class InteractiveMarketAnalyzer:
                 "data_source": "mcp"  # 标记数据来源
             }
             
+            # 优化：如果已有 akshare 数据，直接使用，跳过 MCP 调用以节省时间
+            # 或者只尝试第一个工具名称，快速失败
+            
             # 1. 尝试获取股票基本信息（估值数据）
-            # 优先使用 MCP 工具，如果失败则使用 akshare 数据
             try:
-                # 尝试多个可能的工具名称
-                tool_names = [
-                    "equity_profile",
-                    "equity/profile",
-                    "equity_info",
-                    "equity/info"
-                ]
-                
                 mcp_valuation_success = False
-                for tool_name in tool_names:
+                
+                # 如果已有 akshare 基本面数据，优先使用，跳过 MCP 调用
+                if fundamentals and isinstance(fundamentals, dict):
+                    # 检查是否有可用的估值数据
+                    has_valuation_data = any(key in fundamentals for key in ["市盈率", "PE", "市净率", "PB"])
+                    if has_valuation_data:
+                        print(f"    📊 直接使用 akshare 基本面数据作为估值数据源（跳过 MCP 调用）...")
+                        # 直接使用 akshare 数据，不调用 MCP
+                        akshare_valuation = {}
+                        if "市盈率" in fundamentals or "PE" in fundamentals:
+                            pe = fundamentals.get("市盈率") or fundamentals.get("PE")
+                            if pe:
+                                akshare_valuation["pe_ratio"] = float(pe) if pd.notna(pe) else None
+                        if "市净率" in fundamentals or "PB" in fundamentals:
+                            pb = fundamentals.get("市净率") or fundamentals.get("PB")
+                            if pb:
+                                akshare_valuation["pb_ratio"] = float(pb) if pd.notna(pb) else None
+                        if akshare_valuation:
+                            mcp_result["valuation"] = akshare_valuation
+                            mcp_result["data_source"] = "akshare"
+                            mcp_valuation_success = True
+                            print(f"    ✅ 从 akshare 获取到估值数据")
+                
+                # 如果没有 akshare 数据，尝试 MCP（只尝试第一个工具名称，快速失败）
+                if not mcp_valuation_success:
+                    # 只尝试最可能的工具名称，避免长时间等待
+                    tool_name = "equity_profile"
                     try:
-                        profile_result = await self.analyzer.call_mcp_tool(
-                            tool_name,
-                            {
-                                "symbol": openbb_symbol or symbol,
-                                "provider": "yfinance"
-                            }
+                        import asyncio
+                        # 使用较短的超时（5秒），快速失败
+                        profile_result = await asyncio.wait_for(
+                            self.analyzer.call_mcp_tool(
+                                tool_name,
+                                {
+                                    "symbol": openbb_symbol or symbol,
+                                    "provider": "yfinance"
+                                }
+                            ),
+                            timeout=5.0  # 5秒超时
                         )
                         
                         if profile_result and "error" not in profile_result:
@@ -633,11 +658,12 @@ class InteractiveMarketAnalyzer:
                                     "dividend_yield": profile_data.get("dividend_yield")
                                 }
                                 mcp_valuation_success = True
-                            break
-                    except:
-                        continue
+                                mcp_result["data_source"] = "mcp"
+                    except (asyncio.TimeoutError, Exception) as e:
+                        # 快速失败，不尝试其他工具名称
+                        print(f"    ⚠️ MCP 估值工具调用失败或超时: {str(e)[:50]}")
                 
-                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据
+                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据（作为最后的 fallback）
                 if not mcp_valuation_success and fundamentals and isinstance(fundamentals, dict):
                     print(f"    📊 使用 akshare 基本面数据作为估值数据源...")
                     akshare_valuation = {}
@@ -662,23 +688,55 @@ class InteractiveMarketAnalyzer:
                 print(f"    ⚠️ 获取估值数据失败: {str(e)[:100]}")
             
             # 2. 尝试获取财务指标
-            # 优先使用 MCP 工具，如果失败则使用 akshare 数据
+            # 优化：如果已有 akshare 数据，直接使用，跳过 MCP 调用
             try:
-                tool_names = [
-                    "equity_fundamental_metrics",
-                    "equity/fundamental/metrics",
-                    "equity_metrics"
-                ]
-                
                 mcp_metrics_success = False
-                for tool_name in tool_names:
+                
+                # 如果已有 akshare 基本面数据，优先使用，跳过 MCP 调用
+                if fundamentals and isinstance(fundamentals, dict):
+                    # 检查是否有可用的财务指标数据
+                    has_metrics_data = any(key in fundamentals for key in ["净资产收益率", "ROE", "每股收益", "EPS", "净利润"])
+                    if has_metrics_data:
+                        print(f"    📊 直接使用 akshare 基本面数据作为财务指标数据源（跳过 MCP 调用）...")
+                        # 直接使用 akshare 数据，不调用 MCP
+                        akshare_metrics = {}
+                        if "净资产收益率" in fundamentals or "ROE" in fundamentals:
+                            roe = fundamentals.get("净资产收益率") or fundamentals.get("ROE")
+                            if roe:
+                                akshare_metrics["roe"] = float(roe) if pd.notna(roe) else None
+                        if "每股收益" in fundamentals or "EPS" in fundamentals:
+                            eps = fundamentals.get("每股收益") or fundamentals.get("EPS")
+                            if eps:
+                                akshare_metrics["eps"] = float(eps) if pd.notna(eps) else None
+                        if "净利润" in fundamentals:
+                            net_income = fundamentals.get("净利润")
+                            if net_income:
+                                akshare_metrics["net_income"] = float(net_income) if pd.notna(net_income) else None
+                        if akshare_metrics:
+                            mcp_result["financial_metrics"] = akshare_metrics
+                            if mcp_result["data_source"] == "mcp":
+                                mcp_result["data_source"] = "mixed"
+                            else:
+                                mcp_result["data_source"] = "akshare"
+                            mcp_metrics_success = True
+                            print(f"    ✅ 从 akshare 获取到财务指标")
+                
+                # 如果没有 akshare 数据，尝试 MCP（只尝试第一个工具名称，快速失败）
+                if not mcp_metrics_success:
+                    # 只尝试最可能的工具名称，避免长时间等待
+                    tool_name = "equity_fundamental_metrics"
                     try:
-                        metrics_result = await self.analyzer.call_mcp_tool(
-                            tool_name,
-                            {
-                                "symbol": openbb_symbol or symbol,
-                                "provider": "yfinance"
-                            }
+                        import asyncio
+                        # 使用较短的超时（5秒），快速失败
+                        metrics_result = await asyncio.wait_for(
+                            self.analyzer.call_mcp_tool(
+                                tool_name,
+                                {
+                                    "symbol": openbb_symbol or symbol,
+                                    "provider": "yfinance"
+                                }
+                            ),
+                            timeout=5.0  # 5秒超时
                         )
                         
                         if metrics_result and "error" not in metrics_result:
@@ -694,11 +752,15 @@ class InteractiveMarketAnalyzer:
                                     "roe": metrics_data.get("roe")
                                 }
                                 mcp_metrics_success = True
-                            break
-                    except:
-                        continue
+                                if mcp_result["data_source"] == "akshare":
+                                    mcp_result["data_source"] = "mixed"
+                                else:
+                                    mcp_result["data_source"] = "mcp"
+                    except (asyncio.TimeoutError, Exception) as e:
+                        # 快速失败，不尝试其他工具名称
+                        print(f"    ⚠️ MCP 财务指标工具调用失败或超时: {str(e)[:50]}")
                 
-                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据
+                # 如果 MCP 获取失败，尝试使用 akshare 基本面数据（作为最后的 fallback）
                 if not mcp_metrics_success and fundamentals and isinstance(fundamentals, dict):
                     print(f"    📊 使用 akshare 基本面数据作为财务指标数据源...")
                     akshare_metrics = {}
@@ -877,203 +939,247 @@ class InteractiveMarketAnalyzer:
             "stocks": []
         }
         
-        for i, symbol in enumerate(stock_symbols, 1):
-            print(f"[{i}/{len(stock_symbols)}] 分析 {symbol}...")
-            
-            stock_analysis = {
-                "symbol": symbol,
-                "timing": {},
-                "fundamentals": {},
-                "profile": {}
-            }
-            
-            # ========== 第一步：获取所有数据 ==========
-            # 先获取所有需要的数据，然后再进行计算，确保计算使用最新、最完整的数据
-            hist_data = None
-            stock_info = None
-            realtime_data = None
-            fundamentals = None
-            
-            if self.akshare:
-                # 1. 获取历史数据（所有分析方法都需要）
-                end_date = datetime.now().strftime("%Y%m%d")
-                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-                print(f"  📥 获取历史数据...")
-                hist_data = self.akshare.get_stock_historical(
-                    symbol=symbol,
-                    start_date=start_date,
-                    end_date=end_date,
-                    period="daily",
-                    adjust="qfq"
-                )
-                if not hist_data.empty:
-                    print(f"    ✅ 获取到 {len(hist_data)} 条历史数据")
+        # 并行处理多只股票（优化性能）
+        # 使用 asyncio.gather 并行处理，但限制并发数避免API限流
+        async def analyze_single_stock(symbol: str, index: int, total: int) -> Dict[str, Any]:
+            """分析单只股票的异步函数"""
+            try:
+                print(f"[{index}/{total}] 分析 {symbol}...")
                 
-                # 2. 获取基本信息（只获取一次）
-                print(f"  📋 获取股票基本信息...")
-                stock_info = self.akshare.get_stock_info(symbol)
-                if stock_info:
-                    print(f"    ✅ 获取到基本信息")
-                    stock_analysis["profile"] = {
-                        "info": stock_info,
-                        "name": stock_info.get("股票简称", stock_info.get("名称", symbol)),
-                        "industry": stock_info.get("所属行业", stock_info.get("行业", "N/A")),
-                        "concept": stock_info.get("概念板块", "N/A")
-                    }
-                    print(f"    股票名称: {stock_analysis['profile'].get('name', 'N/A')}")
-                    print(f"    所属行业: {stock_analysis['profile'].get('industry', 'N/A')}")
+                stock_analysis = {
+                    "symbol": symbol,
+                    "timing": {},
+                    "fundamentals": {},
+                    "profile": {}
+                }
                 
-                # 3. 获取实时行情（在计算之前获取，确保计算使用最新价格）
-                if self.akshare.itick_available:
-                    print(f"  📡 获取实时行情...")
-                    try:
-                        realtime_data = self.akshare._get_realtime_from_itick(symbol)
-                        if realtime_data:
-                            print(f"    ✅ 获取到实时行情数据")
-                        else:
-                            print(f"    ⚠️ 实时行情数据为空")
-                    except Exception as e:
-                        print(f"    ⚠️ 获取实时行情失败: {str(e)[:100]}")
+                # ========== 第一步：获取所有数据 ==========
+                # 先获取所有需要的数据，然后再进行计算，确保计算使用最新、最完整的数据
+                hist_data = None
+                stock_info = None
+                realtime_data = None
+                fundamentals = None
                 
-                # 4. 获取基本面数据（包含财务指标，也可能包含实时行情）
-                print(f"  📈 获取基本面数据...")
-                fundamentals = self.get_stock_fundamentals_akshare(symbol, stock_info=stock_info, hist_data=hist_data)
-                stock_analysis["fundamentals"] = fundamentals
-                
-                # 如果基本面数据中包含了实时行情，合并到 realtime_data
-                if fundamentals and isinstance(fundamentals, dict):
-                    # 检查是否有实时行情数据（iTick API 可能在 get_stock_fundamentals 中已调用）
-                    if not realtime_data and any(key in fundamentals for key in ['current_price', '最新价', 'price', '实时价格']):
-                        realtime_data = {k: v for k, v in fundamentals.items() 
-                                       if k in ['current_price', '最新价', 'price', '实时价格', '涨跌幅', 'change_percent', '成交量', 'volume']}
-            
-            # ========== 第二步：使用完整数据进行计算 ==========
-            # 现在所有数据都已获取，可以进行计算了
-            
-            # 1. 时机分析（使用完整数据：历史数据 + 实时行情）
-            if self.akshare and hist_data is not None and not hist_data.empty:
-                print(f"  ⏰ 分析买入时机（使用完整数据）...")
-                timing = self.get_stock_timing_analysis(symbol, hist_data=hist_data)
-                stock_analysis["timing"] = timing
-            elif self.akshare:
-                print(f"  ⏰ 分析买入时机...")
-                timing = self.get_stock_timing_analysis(symbol)
-                stock_analysis["timing"] = timing
-                
-            # 2. 技术指标分析（使用完整数据：历史数据 + 实时行情）
-            if self.akshare and hist_data is not None and not hist_data.empty:
-                print(f"  📊 计算技术指标（MACD、布林带等，使用完整数据）...")
-                technical_analysis = self.get_stock_technical_indicators_openbb(symbol, hist_data=hist_data)
-                if "error" not in technical_analysis:
-                    stock_analysis["openbb_indicators"] = technical_analysis  # 保持字段名兼容
-                    if technical_analysis.get("signals"):
-                        print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
-                else:
-                    print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
-            elif self.akshare:
-                print(f"  📊 计算技术指标（MACD、布林带等）...")
-                technical_analysis = self.get_stock_technical_indicators_openbb(symbol)
-                if "error" not in technical_analysis:
-                    stock_analysis["openbb_indicators"] = technical_analysis
-                    if technical_analysis.get("signals"):
-                        print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
-                else:
-                    print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
-            
-            # 显示时机分析结果
-            timing = stock_analysis.get("timing", {})
-            if "timing" in timing:
-                rec = timing["timing"]["recommendation"]
-                score = timing["timing"]["score"]
-                print(f"    时机评分: {score}, 建议: {rec}")
-                
-                # 显示详细的技术指标
-                indicators = timing.get("indicators", {})
-                if indicators:
-                    print(f"    📊 技术指标:")
-                    
-                    # 均线指标
-                    if "MA" in indicators:
-                        ma = indicators["MA"]
-                        ma_str = f"      均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
-                        if ma.get('MA60'):
-                            ma_str += f", MA60={ma.get('MA60', 0):.2f}"
-                        ma_str += f", 趋势={ma.get('trend', 'N/A')}"
-                        if ma.get('bullish_arrangement'):
-                            ma_str += " ✅多头排列"
-                        if ma.get('price_above_ma'):
-                            ma_str += " ✅价格在均线之上"
-                        print(ma_str)
-                    
-                    # RSI指标
-                    if "RSI" in indicators:
-                        rsi = indicators["RSI"]
-                        rsi_value = rsi.get('value', 0)
-                        rsi_signal = rsi.get('signal', 'N/A')
-                        print(f"      RSI: {rsi_value:.2f} ({rsi_signal})")
-                    
-                    # 价格位置
-                    if "PricePosition" in indicators:
-                        pos = indicators["PricePosition"]
-                        position_pct = pos.get('position_percent', 0)
-                        pos_signal = pos.get('signal', 'N/A')
-                        current_price = pos.get('current', 0)
-                        print(f"      价格位置: {current_price:.2f} ({position_pct:.1f}%, {pos_signal})")
-                    
-                    # 突破分析
-                    if "Breakthrough" in indicators:
-                        bt = indicators["Breakthrough"]
-                        if bt.get('breakthrough_60d'):
-                            print(f"      突破: ✅突破60日高点")
-                        elif bt.get('breakthrough_20d'):
-                            print(f"      突破: ✅突破20日高点")
-                        else:
-                            print(f"      突破: 未突破近期高点")
-                    
-                    # 动量指标
-                    if "Momentum" in indicators:
-                        mom = indicators["Momentum"]
-                        momentum_5d = mom.get('momentum_5d', 0)
-                        momentum_20d = mom.get('momentum_20d', 0)
-                        mom_signal = mom.get('signal', 'N/A')
-                        print(f"      动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal})")
-                    
-                    # 成交量
-                    if "Volume" in indicators:
-                        vol = indicators["Volume"]
-                        volume_ratio = vol.get('ratio', 1)
-                        vol_signal = vol.get('signal', 'N/A')
-                        print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
-                
-                elif "error" in timing:
-                    print(f"    ⚠️ 时机分析失败: {timing['error']}")
-            
-            # 3. OpenBB MCP 分析（如果 MCP 可用，集成 akshare 数据）
-            if self.analyzer and hasattr(self.analyzer, 'call_mcp_tool'):
-                print(f"  🤖 OpenBB MCP 分析（集成 akshare 数据）...")
-                try:
-                    # 传递 akshare 获取的基本面数据，作为 MCP 的 fallback
-                    mcp_analysis = await self.get_stock_mcp_analysis(
-                        symbol, 
-                        hist_data=hist_data,
-                        fundamentals=fundamentals
+                if self.akshare:
+                    # 1. 获取历史数据（所有分析方法都需要）
+                    end_date = datetime.now().strftime("%Y%m%d")
+                    start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                    print(f"  📥 获取历史数据...")
+                    hist_data = self.akshare.get_stock_historical(
+                        symbol=symbol,
+                        start_date=start_date,
+                        end_date=end_date,
+                        period="daily",
+                        adjust="qfq"
                     )
-                    if mcp_analysis and "error" not in mcp_analysis:
-                        stock_analysis["mcp_analysis"] = mcp_analysis
-                        data_source = mcp_analysis.get("data_source", "unknown")
-                        if mcp_analysis.get("prediction"):
-                            print(f"    ✅ 获取到预测数据（数据源: {data_source}）")
-                        if mcp_analysis.get("valuation"):
-                            print(f"    ✅ 获取到估值数据（数据源: {data_source}）")
-                        if mcp_analysis.get("financial_metrics"):
-                            print(f"    ✅ 获取到财务指标（数据源: {data_source}）")
+                    if not hist_data.empty:
+                        print(f"    ✅ 获取到 {len(hist_data)} 条历史数据")
+                    
+                    # 2. 获取基本信息（只获取一次）
+                    print(f"  📋 获取股票基本信息...")
+                    stock_info = self.akshare.get_stock_info(symbol)
+                    if stock_info:
+                        print(f"    ✅ 获取到基本信息")
+                        stock_analysis["profile"] = {
+                            "info": stock_info,
+                            "name": stock_info.get("股票简称", stock_info.get("名称", symbol)),
+                            "industry": stock_info.get("所属行业", stock_info.get("行业", "N/A")),
+                            "concept": stock_info.get("概念板块", "N/A")
+                        }
+                        print(f"    股票名称: {stock_analysis['profile'].get('name', 'N/A')}")
+                        print(f"    所属行业: {stock_analysis['profile'].get('industry', 'N/A')}")
+                    
+                    # 3. 获取实时行情（在计算之前获取，确保计算使用最新价格）
+                    if self.akshare.itick_available:
+                        print(f"  📡 获取实时行情...")
+                        try:
+                            realtime_data = self.akshare._get_realtime_from_itick(symbol)
+                            if realtime_data:
+                                print(f"    ✅ 获取到实时行情数据")
+                            else:
+                                print(f"    ⚠️ 实时行情数据为空")
+                        except Exception as e:
+                            print(f"    ⚠️ 获取实时行情失败: {str(e)[:100]}")
+                    
+                    # 4. 获取基本面数据（包含财务指标，也可能包含实时行情）
+                    print(f"  📈 获取基本面数据...")
+                    fundamentals = self.get_stock_fundamentals_akshare(symbol, stock_info=stock_info, hist_data=hist_data)
+                    stock_analysis["fundamentals"] = fundamentals
+                    
+                    # 如果基本面数据中包含了实时行情，合并到 realtime_data
+                    if fundamentals and isinstance(fundamentals, dict):
+                        # 检查是否有实时行情数据（iTick API 可能在 get_stock_fundamentals 中已调用）
+                        if not realtime_data and any(key in fundamentals for key in ['current_price', '最新价', 'price', '实时价格']):
+                            realtime_data = {k: v for k, v in fundamentals.items() 
+                                           if k in ['current_price', '最新价', 'price', '实时价格', '涨跌幅', 'change_percent', '成交量', 'volume']}
+                
+                # ========== 第二步：使用完整数据进行计算 ==========
+                # 现在所有数据都已获取，可以进行计算了
+                
+                # 1. 时机分析（使用完整数据：历史数据 + 实时行情）
+                if self.akshare and hist_data is not None and not hist_data.empty:
+                    print(f"  ⏰ 分析买入时机（使用完整数据）...")
+                    timing = self.get_stock_timing_analysis(symbol, hist_data=hist_data)
+                    stock_analysis["timing"] = timing
+                elif self.akshare:
+                    print(f"  ⏰ 分析买入时机...")
+                    timing = self.get_stock_timing_analysis(symbol)
+                    stock_analysis["timing"] = timing
+                    
+                # 2. 技术指标分析（使用完整数据：历史数据 + 实时行情）
+                if self.akshare and hist_data is not None and not hist_data.empty:
+                    print(f"  📊 计算技术指标（MACD、布林带等，使用完整数据）...")
+                    technical_analysis = self.get_stock_technical_indicators_openbb(symbol, hist_data=hist_data)
+                    if "error" not in technical_analysis:
+                        stock_analysis["openbb_indicators"] = technical_analysis  # 保持字段名兼容
+                        if technical_analysis.get("signals"):
+                            print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
                     else:
-                        print(f"    ⚠️ MCP 分析失败: {mcp_analysis.get('error', '未知错误') if mcp_analysis else '无响应'}")
-                except Exception as e:
-                    print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
+                        print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
+                elif self.akshare:
+                    print(f"  📊 计算技术指标（MACD、布林带等）...")
+                    technical_analysis = self.get_stock_technical_indicators_openbb(symbol)
+                    if "error" not in technical_analysis:
+                        stock_analysis["openbb_indicators"] = technical_analysis
+                        if technical_analysis.get("signals"):
+                            print(f"    发现 {len(technical_analysis['signals'])} 个交易信号")
+                    else:
+                        print(f"    ⚠️ 技术指标计算失败: {technical_analysis.get('error')}")
+                
+                # 显示时机分析结果
+                timing = stock_analysis.get("timing", {})
+                if "timing" in timing:
+                    rec = timing["timing"]["recommendation"]
+                    score = timing["timing"]["score"]
+                    print(f"    时机评分: {score}, 建议: {rec}")
+                    
+                    # 显示详细的技术指标
+                    indicators = timing.get("indicators", {})
+                    if indicators:
+                        print(f"    📊 技术指标:")
+                        
+                        # 均线指标
+                        if "MA" in indicators:
+                            ma = indicators["MA"]
+                            ma_str = f"      均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
+                            if ma.get('MA60'):
+                                ma_str += f", MA60={ma.get('MA60', 0):.2f}"
+                            ma_str += f", 趋势={ma.get('trend', 'N/A')}"
+                            if ma.get('bullish_arrangement'):
+                                ma_str += " ✅多头排列"
+                            if ma.get('price_above_ma'):
+                                ma_str += " ✅价格在均线之上"
+                            print(ma_str)
+                        
+                        # RSI指标
+                        if "RSI" in indicators:
+                            rsi = indicators["RSI"]
+                            rsi_value = rsi.get('value', 0)
+                            rsi_signal = rsi.get('signal', 'N/A')
+                            print(f"      RSI: {rsi_value:.2f} ({rsi_signal})")
+                        
+                        # 价格位置
+                        if "PricePosition" in indicators:
+                            pos = indicators["PricePosition"]
+                            position_pct = pos.get('position_percent', 0)
+                            pos_signal = pos.get('signal', 'N/A')
+                            current_price = pos.get('current', 0)
+                            print(f"      价格位置: {current_price:.2f} ({position_pct:.1f}%, {pos_signal})")
+                        
+                        # 突破分析
+                        if "Breakthrough" in indicators:
+                            bt = indicators["Breakthrough"]
+                            if bt.get('breakthrough_60d'):
+                                print(f"      突破: ✅突破60日高点")
+                            elif bt.get('breakthrough_20d'):
+                                print(f"      突破: ✅突破20日高点")
+                            else:
+                                print(f"      突破: 未突破近期高点")
+                        
+                        # 动量指标
+                        if "Momentum" in indicators:
+                            mom = indicators["Momentum"]
+                            momentum_5d = mom.get('momentum_5d', 0)
+                            momentum_20d = mom.get('momentum_20d', 0)
+                            mom_signal = mom.get('signal', 'N/A')
+                            print(f"      动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal})")
+                        
+                        # 成交量
+                        if "Volume" in indicators:
+                            vol = indicators["Volume"]
+                            volume_ratio = vol.get('ratio', 1)
+                            vol_signal = vol.get('signal', 'N/A')
+                            print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
+                    
+                    elif "error" in timing:
+                        print(f"    ⚠️ 时机分析失败: {timing['error']}")
+                
+                # 3. OpenBB MCP 分析（如果 MCP 可用，集成 akshare 数据）
+                if self.analyzer and hasattr(self.analyzer, 'call_mcp_tool'):
+                    print(f"  🤖 OpenBB MCP 分析（集成 akshare 数据）...")
+                    try:
+                        # 传递 akshare 获取的基本面数据，作为 MCP 的 fallback
+                        mcp_analysis = await self.get_stock_mcp_analysis(
+                            symbol, 
+                            hist_data=hist_data,
+                            fundamentals=fundamentals
+                        )
+                        if mcp_analysis and "error" not in mcp_analysis:
+                            stock_analysis["mcp_analysis"] = mcp_analysis
+                            data_source = mcp_analysis.get("data_source", "unknown")
+                            if mcp_analysis.get("prediction"):
+                                print(f"    ✅ 获取到预测数据（数据源: {data_source}）")
+                            if mcp_analysis.get("valuation"):
+                                print(f"    ✅ 获取到估值数据（数据源: {data_source}）")
+                            if mcp_analysis.get("financial_metrics"):
+                                print(f"    ✅ 获取到财务指标（数据源: {data_source}）")
+                        else:
+                            print(f"    ⚠️ MCP 分析失败: {mcp_analysis.get('error', '未知错误') if mcp_analysis else '无响应'}")
+                    except Exception as e:
+                        print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
             
-            results["stocks"].append(stock_analysis)
-            print()
+                print()
+                return stock_analysis
+            except Exception as e:
+                print(f"  ❌ 分析 {symbol} 时出错: {str(e)[:200]}")
+                return {
+                    "symbol": symbol,
+                    "error": str(e),
+                    "timing": {},
+                    "fundamentals": {},
+                    "profile": {}
+                }
+        
+        # 并行处理股票列表（限制并发数为3，避免API限流）
+        max_concurrent = 3  # 同时分析3只股票
+        
+        # 分批并行处理，每批最多3只股票
+        for batch_start in range(0, len(stock_symbols), max_concurrent):
+            batch_symbols = stock_symbols[batch_start:batch_start + max_concurrent]
+            batch_indices = range(batch_start + 1, batch_start + len(batch_symbols) + 1)
+            
+            # 创建任务
+            tasks = [
+                analyze_single_stock(symbol, idx, len(stock_symbols))
+                for symbol, idx in zip(batch_symbols, batch_indices)
+            ]
+            
+            # 并行执行
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 处理结果
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    print(f"  ⚠️ 分析出错: {str(result)[:100]}")
+                    results["stocks"].append({
+                        "symbol": "UNKNOWN",
+                        "error": str(result),
+                        "timing": {},
+                        "fundamentals": {},
+                        "profile": {}
+                    })
+                else:
+                    results["stocks"].append(result)
         
         return results
     
@@ -1087,6 +1193,7 @@ class InteractiveMarketAnalyzer:
         Returns:
             格式化的报告文本
         """
+        print("  📝 开始生成报告...")
         report = []
         report.append("="*60)
         report.append("自定义股票分析报告")
@@ -1094,7 +1201,12 @@ class InteractiveMarketAnalyzer:
         report.append("="*60)
         report.append("")
         
-        for stock in analysis.get("stocks", []):
+        stocks = analysis.get("stocks", [])
+        print(f"  📊 处理 {len(stocks)} 只股票的报告...")
+        
+        for i, stock in enumerate(stocks, 1):
+            if i % 5 == 0:  # 每5只股票显示一次进度
+                print(f"    处理进度: {i}/{len(stocks)}")
             symbol = stock.get("symbol", "N/A")
             
             # 获取股票基本信息
@@ -1274,12 +1386,14 @@ class InteractiveMarketAnalyzer:
                                 report.append(f"      • {reason}")
                     else:
                         report.append(f"    🎯 MCP 买入信号: ❌ 无买入信号")
-                elif "error" in timing:
-                    report.append(f"\n⏰ 买入时机分析:")
-                    report.append(f"  ⚠️ 分析失败: {timing.get('error', '未知错误')}")
-                else:
-                    report.append(f"\n⏰ 买入时机分析:")
-                    report.append(f"  ⚠️ 数据不完整，无法进行分析")
+            
+            # 如果时机分析有错误，显示错误信息（独立检查，不依赖 MCP 分析）
+            if timing and "error" in timing:
+                report.append(f"\n⏰ 买入时机分析:")
+                report.append(f"  ⚠️ 分析失败: {timing.get('error', '未知错误')}")
+            elif not timing or "timing" not in timing:
+                report.append(f"\n⏰ 买入时机分析:")
+                report.append(f"  ⚠️ 数据不完整，无法进行分析")
             
             # 价格信息
             fundamentals = stock.get("fundamentals", {})
@@ -1298,29 +1412,41 @@ class InteractiveMarketAnalyzer:
             report.append("")
         
         # 添加策略推荐和风险提示
+        print("  📋 生成策略推荐...")
         report.append("="*60)
         report.append("5. 策略推荐（趋势/反转）")
         report.append("-"*60)
-        report.append(self._format_strategy_recommendation_for_stocks(analysis.get("stocks", [])))
+        try:
+            report.append(self._format_strategy_recommendation_for_stocks(analysis.get("stocks", [])))
+        except Exception as e:
+            print(f"    ⚠️ 生成策略推荐失败: {str(e)[:100]}")
+            report.append(f"策略推荐生成失败: {str(e)[:100]}")
         report.append("")
         
+        print("  ⚠️ 生成风险提示...")
         report.append("6. 风险提示与触发点")
         report.append("-"*60)
         report.append(self._format_risk_warnings())
         report.append("")
         
         # 添加买入理由汇总（右侧交易策略筛选）
+        print("  🎯 生成买入理由汇总...")
         report.append("="*60)
         report.append("7. 买入理由汇总（右侧交易策略 + OpenBB MCP 分析）")
         report.append("-"*60)
-        buy_reasons = self._format_buy_reasons_summary(analysis.get("stocks", []))
-        report.append(buy_reasons)
+        try:
+            buy_reasons = self._format_buy_reasons_summary(analysis.get("stocks", []))
+            report.append(buy_reasons)
+        except Exception as e:
+            print(f"    ⚠️ 生成买入理由汇总失败: {str(e)[:100]}")
+            report.append(f"买入理由汇总生成失败: {str(e)[:100]}")
         report.append("")
         
         report.append("="*60)
         report.append("报告结束")
         report.append("="*60)
         
+        print("  ✅ 报告生成完成")
         return "\n".join(report)
     
     def _format_strategy_recommendation_for_stocks(self, stocks: List[Dict[str, Any]]) -> str:

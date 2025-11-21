@@ -151,11 +151,19 @@ def analyze_custom_stocks_api(request):
                 )
                 
                 # 生成报告（即使分析有部分错误，也尝试生成报告）
+                print("📝 开始生成报告...")
                 report = ""
                 try:
+                    import time
+                    start_time = time.time()
                     report = analyzer.format_custom_analysis_report(analysis)
+                    elapsed_time = time.time() - start_time
+                    print(f"✅ 报告生成完成，耗时 {elapsed_time:.2f} 秒")
                 except Exception as report_error:
+                    import traceback
+                    error_trace = traceback.format_exc()
                     print(f"⚠️ 生成报告时出错: {str(report_error)[:200]}")
+                    print(f"错误详情: {error_trace[:500]}")
                     # 如果报告生成失败，创建一个简单的报告
                     report = f"分析完成，但报告生成时出现错误: {str(report_error)[:200]}\n\n"
                     if analysis and analysis.get("stocks"):
