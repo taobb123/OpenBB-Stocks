@@ -8,6 +8,8 @@ from pathlib import Path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+import numpy as np
+import pandas as pd
 
 # 添加项目根目录到路径
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -23,6 +25,48 @@ def get_extract_function():
     """延迟导入 extract_stock_codes"""
     from extract_stock_codes import extract_stock_codes
     return extract_stock_codes
+
+
+def make_json_serializable(obj):
+    """
+    递归地将对象转换为 JSON 可序列化的格式
+    处理 numpy、pandas 类型和 Python bool 类型
+    """
+    # 处理 numpy 类型
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        # 确保所有布尔值都转换为 Python bool
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.Series):
+        return obj.to_dict()
+    elif isinstance(obj, pd.DataFrame):
+        return obj.to_dict('records')
+    # 处理字典
+    elif isinstance(obj, dict):
+        return {key: make_json_serializable(value) for key, value in obj.items()}
+    # 处理列表和元组
+    elif isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    # 处理基本类型
+    elif isinstance(obj, (int, float, str, type(None))):
+        return obj
+    # 对于其他类型，尝试转换为字符串或返回 None
+    else:
+        try:
+            # 尝试 JSON 序列化测试
+            json.dumps(obj)
+            return obj
+        except (TypeError, ValueError):
+            # 如果无法序列化，尝试转换为字符串
+            try:
+                return str(obj)
+            except:
+                return None
 
 
 @csrf_exempt
@@ -116,6 +160,8 @@ def analyze_custom_stocks_api(request):
         
         # 执行异步函数
         result = asyncio.run(run_analysis())
+        # 确保所有数据都是 JSON 可序列化的
+        result = make_json_serializable(result)
         return JsonResponse(result)
         
     except Exception as e:
@@ -172,6 +218,8 @@ def run_full_market_analysis_api(request):
         
         # 执行异步函数
         result = asyncio.run(run_analysis())
+        # 确保所有数据都是 JSON 可序列化的
+        result = make_json_serializable(result)
         return JsonResponse(result)
         
     except Exception as e:

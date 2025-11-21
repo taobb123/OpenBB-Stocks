@@ -97,15 +97,28 @@ class InteractiveMarketAnalyzer:
             # 1. 移动平均线
             if "收盘" in hist_data.columns:
                 close_prices = hist_data["收盘"].astype(float)
+                current_price = close_prices.iloc[-1]
                 ma5 = close_prices.tail(5).mean()
                 ma20 = close_prices.tail(20).mean()
                 ma60 = close_prices.tail(60).mean() if len(close_prices) >= 60 else None
+                
+                # 判断均线多头排列（右侧交易重要指标）
+                ma_bullish = False
+                if ma60:
+                    ma_bullish = ma5 > ma20 > ma60
+                else:
+                    ma_bullish = ma5 > ma20
+                
+                # 判断价格是否在均线之上
+                price_above_ma = current_price > ma5 and current_price > ma20
                 
                 analysis["indicators"]["MA"] = {
                     "MA5": float(ma5),
                     "MA20": float(ma20),
                     "MA60": float(ma60) if ma60 else None,
-                    "trend": "上升" if ma5 > ma20 else "下降"
+                    "trend": "上升" if ma5 > ma20 else "下降",
+                    "bullish_arrangement": ma_bullish,  # 多头排列
+                    "price_above_ma": price_above_ma  # 价格在均线之上
                 }
             
             # 2. 相对强弱指标（RSI）
@@ -118,10 +131,15 @@ class InteractiveMarketAnalyzer:
                 rsi = 100 - (100 / (1 + rs))
                 current_rsi = float(rsi.iloc[-1]) if not rsi.empty else None
                 
+                # 右侧交易：RSI在50-70区间为强势信号
+                rsi_signal = "超买" if current_rsi and current_rsi > 70 else \
+                             "超卖" if current_rsi and current_rsi < 30 else \
+                             "强势" if current_rsi and 50 <= current_rsi <= 70 else \
+                             "弱势" if current_rsi and 30 <= current_rsi < 50 else "正常"
+                
                 analysis["indicators"]["RSI"] = {
                     "value": current_rsi,
-                    "signal": "超买" if current_rsi and current_rsi > 70 else 
-                             "超卖" if current_rsi and current_rsi < 30 else "正常"
+                    "signal": rsi_signal
                 }
             
             # 3. 价格位置（相对于52周高低点）
@@ -132,12 +150,73 @@ class InteractiveMarketAnalyzer:
                 current = close_prices.iloc[-1]
                 position = (current - low_52w) / (high_52w - low_52w) * 100 if high_52w != low_52w else 50
                 
+                # 右侧交易偏好中高位（50%-85%为理想区间）
+                if position > 85:
+                    pos_signal = "极高"
+                elif position > 70:
+                    pos_signal = "高位"
+                elif position > 50:
+                    pos_signal = "中高位"
+                elif position > 30:
+                    pos_signal = "中位"
+                elif position > 20:
+                    pos_signal = "中低位"
+                else:
+                    pos_signal = "低位"
+                
                 analysis["indicators"]["PricePosition"] = {
                     "high_52w": float(high_52w),
                     "low_52w": float(low_52w),
                     "current": float(current),
                     "position_percent": float(position),
-                    "signal": "高位" if position > 80 else "低位" if position < 20 else "中位"
+                    "signal": pos_signal
+                }
+            
+            # 3.5. 价格突破分析（右侧交易关键指标）
+            if "收盘" in hist_data.columns:
+                close_prices = hist_data["收盘"].astype(float)
+                current_price = close_prices.iloc[-1]
+                # 计算近期高点（排除当前价格，看前20日、60日）
+                if len(close_prices) >= 21:
+                    high_20d_prev = close_prices.iloc[-21:-1].max()  # 前20日（不含今日）最高点
+                    breakthrough_20d = current_price >= high_20d_prev * 0.995  # 突破或接近前20日高点
+                else:
+                    high_20d_prev = close_prices.iloc[:-1].max() if len(close_prices) > 1 else current_price
+                    breakthrough_20d = current_price >= high_20d_prev * 0.995
+                
+                if len(close_prices) >= 61:
+                    high_60d_prev = close_prices.iloc[-61:-1].max()  # 前60日（不含今日）最高点
+                    breakthrough_60d = current_price >= high_60d_prev * 0.995
+                elif len(close_prices) >= 21:
+                    high_60d_prev = close_prices.iloc[:-1].max()
+                    breakthrough_60d = current_price >= high_60d_prev * 0.995
+                else:
+                    high_60d_prev = None
+                    breakthrough_60d = False
+                
+                # 计算包含当前价格的最高点（用于显示）
+                high_20d = close_prices.tail(20).max()
+                high_60d = close_prices.tail(60).max() if len(close_prices) >= 60 else None
+                
+                analysis["indicators"]["Breakthrough"] = {
+                    "high_20d": float(high_20d),
+                    "high_60d": float(high_60d) if high_60d else None,
+                    "breakthrough_20d": breakthrough_20d,
+                    "breakthrough_60d": breakthrough_60d
+                }
+            
+            # 3.6. 动量指标（价格变化率）
+            if "收盘" in hist_data.columns:
+                close_prices = hist_data["收盘"].astype(float)
+                # 计算5日、20日价格变化率
+                momentum_5d = ((close_prices.iloc[-1] - close_prices.iloc[-6]) / close_prices.iloc[-6] * 100) if len(close_prices) >= 6 else 0
+                momentum_20d = ((close_prices.iloc[-1] - close_prices.iloc[-21]) / close_prices.iloc[-21] * 100) if len(close_prices) >= 21 else 0
+                
+                analysis["indicators"]["Momentum"] = {
+                    "momentum_5d": float(momentum_5d),
+                    "momentum_20d": float(momentum_20d),
+                    "signal": "强势" if momentum_5d > 3 and momentum_20d > 5 else 
+                             "弱势" if momentum_5d < -3 or momentum_20d < -5 else "正常"
                 }
             
             # 4. 成交量分析
@@ -154,44 +233,93 @@ class InteractiveMarketAnalyzer:
                     "signal": "放量" if volume_ratio > 1.5 else "缩量" if volume_ratio < 0.7 else "正常"
                 }
             
-            # 综合时机判断
+            # 综合时机判断（右侧交易风格：追涨杀跌）
             timing_score = 0
             timing_factors = []
             
-            # MA趋势
-            if analysis["indicators"]["MA"]["trend"] == "上升":
-                timing_score += 2
+            # 1. 均线多头排列（右侧交易核心指标）
+            ma_data = analysis["indicators"]["MA"]
+            if ma_data.get("bullish_arrangement", False):
+                timing_score += 3
+                timing_factors.append("✅ 均线多头排列，趋势强劲")
+            elif ma_data.get("trend") == "上升":
+                timing_score += 1
                 timing_factors.append("✅ 均线呈上升趋势")
             else:
-                timing_factors.append("⚠️ 均线呈下降趋势")
+                timing_score -= 2
+                timing_factors.append("❌ 均线呈下降趋势，不适合右侧交易")
             
-            # RSI信号
-            rsi_signal = analysis["indicators"]["RSI"]["signal"]
-            if rsi_signal == "超卖":
+            # 2. 价格在均线之上
+            if ma_data.get("price_above_ma", False):
                 timing_score += 2
-                timing_factors.append("✅ RSI显示超卖，可能反弹")
+                timing_factors.append("✅ 价格位于均线之上，处于上升通道")
+            else:
+                timing_score -= 1
+                timing_factors.append("⚠️ 价格位于均线之下，趋势偏弱")
+            
+            # 3. RSI信号（右侧交易偏好强势但不超买）
+            rsi_signal = analysis["indicators"]["RSI"]["signal"]
+            rsi_value = analysis["indicators"]["RSI"]["value"]
+            if rsi_signal == "强势" and rsi_value and 50 <= rsi_value <= 70:
+                timing_score += 2
+                timing_factors.append("✅ RSI处于强势区间，动量充足")
             elif rsi_signal == "超买":
                 timing_score -= 2
-                timing_factors.append("⚠️ RSI显示超买，注意风险")
-            
-            # 价格位置
-            price_signal = analysis["indicators"]["PricePosition"]["signal"]
-            if price_signal == "低位":
-                timing_score += 2
-                timing_factors.append("✅ 价格处于52周低位")
-            elif price_signal == "高位":
+                timing_factors.append("⚠️ RSI超买，注意回调风险")
+            elif rsi_signal == "超卖":
+                timing_score -= 2
+                timing_factors.append("❌ RSI超卖，不符合右侧交易风格")
+            elif rsi_signal == "弱势":
                 timing_score -= 1
-                timing_factors.append("⚠️ 价格处于52周高位")
+                timing_factors.append("⚠️ RSI偏弱，缺乏上涨动力")
             
-            # 成交量
+            # 4. 价格位置（右侧交易偏好中高位）
+            price_signal = analysis["indicators"]["PricePosition"]["signal"]
+            position_percent = analysis["indicators"]["PricePosition"]["position_percent"]
+            if price_signal in ["中高位", "高位"] and 50 <= position_percent <= 85:
+                timing_score += 2
+                timing_factors.append("✅ 价格处于中高位，符合右侧交易")
+            elif price_signal == "极高" and position_percent > 85:
+                timing_score -= 1
+                timing_factors.append("⚠️ 价格处于极高位置，追高风险较大")
+            elif price_signal in ["低位", "中低位"]:
+                timing_score -= 2
+                timing_factors.append("❌ 价格处于低位，不符合右侧交易风格")
+            
+            # 5. 价格突破（右侧交易关键信号）
+            if "Breakthrough" in analysis["indicators"]:
+                breakthrough = analysis["indicators"]["Breakthrough"]
+                if breakthrough.get("breakthrough_60d", False):
+                    timing_score += 3
+                    timing_factors.append("✅ 突破60日高点，强势突破信号")
+                elif breakthrough.get("breakthrough_20d", False):
+                    timing_score += 2
+                    timing_factors.append("✅ 突破20日高点，趋势延续")
+            
+            # 6. 动量指标
+            if "Momentum" in analysis["indicators"]:
+                momentum = analysis["indicators"]["Momentum"]
+                if momentum.get("signal") == "强势":
+                    timing_score += 2
+                    timing_factors.append(f"✅ 短期动量强劲（5日{momentum.get('momentum_5d', 0):.2f}%，20日{momentum.get('momentum_20d', 0):.2f}%）")
+                elif momentum.get("signal") == "弱势":
+                    timing_score -= 2
+                    timing_factors.append("❌ 动量偏弱，缺乏上涨动力")
+            
+            # 7. 成交量（右侧交易需要放量确认）
             volume_signal = analysis["indicators"]["Volume"]["signal"]
-            if volume_signal == "放量":
-                timing_score += 1
-                timing_factors.append("✅ 成交量放大，资金关注")
+            volume_ratio = analysis["indicators"]["Volume"]["ratio"]
+            if volume_signal == "放量" and volume_ratio > 1.5:
+                timing_score += 2
+                timing_factors.append(f"✅ 成交量放大{volume_ratio:.2f}倍，资金积极介入")
+            elif volume_signal == "缩量":
+                timing_score -= 1
+                timing_factors.append("⚠️ 成交量萎缩，缺乏资金推动")
             
+            # 综合评分和建议（右侧交易需要更高的评分阈值）
             analysis["timing"] = {
                 "score": timing_score,
-                "recommendation": "买入" if timing_score >= 3 else "观望" if timing_score >= 0 else "谨慎",
+                "recommendation": "买入" if timing_score >= 6 else "观望" if timing_score >= 2 else "谨慎",
                 "factors": timing_factors
             }
             
@@ -290,6 +418,67 @@ class InteractiveMarketAnalyzer:
                     rec = timing["timing"]["recommendation"]
                     score = timing["timing"]["score"]
                     print(f"    时机评分: {score}, 建议: {rec}")
+                    
+                    # 显示详细的技术指标
+                    indicators = timing.get("indicators", {})
+                    if indicators:
+                        print(f"    📊 技术指标:")
+                        
+                        # 均线指标
+                        if "MA" in indicators:
+                            ma = indicators["MA"]
+                            ma_str = f"      均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
+                            if ma.get('MA60'):
+                                ma_str += f", MA60={ma.get('MA60', 0):.2f}"
+                            ma_str += f", 趋势={ma.get('trend', 'N/A')}"
+                            if ma.get('bullish_arrangement'):
+                                ma_str += " ✅多头排列"
+                            if ma.get('price_above_ma'):
+                                ma_str += " ✅价格在均线之上"
+                            print(ma_str)
+                        
+                        # RSI指标
+                        if "RSI" in indicators:
+                            rsi = indicators["RSI"]
+                            rsi_value = rsi.get('value', 0)
+                            rsi_signal = rsi.get('signal', 'N/A')
+                            print(f"      RSI: {rsi_value:.2f} ({rsi_signal})")
+                        
+                        # 价格位置
+                        if "PricePosition" in indicators:
+                            pos = indicators["PricePosition"]
+                            position_pct = pos.get('position_percent', 0)
+                            pos_signal = pos.get('signal', 'N/A')
+                            current_price = pos.get('current', 0)
+                            print(f"      价格位置: {current_price:.2f} ({position_pct:.1f}%, {pos_signal})")
+                        
+                        # 突破分析
+                        if "Breakthrough" in indicators:
+                            bt = indicators["Breakthrough"]
+                            if bt.get('breakthrough_60d'):
+                                print(f"      突破: ✅突破60日高点")
+                            elif bt.get('breakthrough_20d'):
+                                print(f"      突破: ✅突破20日高点")
+                            else:
+                                print(f"      突破: 未突破近期高点")
+                        
+                        # 动量指标
+                        if "Momentum" in indicators:
+                            mom = indicators["Momentum"]
+                            momentum_5d = mom.get('momentum_5d', 0)
+                            momentum_20d = mom.get('momentum_20d', 0)
+                            mom_signal = mom.get('signal', 'N/A')
+                            print(f"      动量: 5日={momentum_5d:.2f}%, 20日={momentum_20d:.2f}% ({mom_signal})")
+                        
+                        # 成交量
+                        if "Volume" in indicators:
+                            vol = indicators["Volume"]
+                            volume_ratio = vol.get('ratio', 1)
+                            vol_signal = vol.get('signal', 'N/A')
+                            print(f"      成交量: 量比={volume_ratio:.2f} ({vol_signal})")
+                
+                elif "error" in timing:
+                    print(f"    ⚠️ 时机分析失败: {timing['error']}")
             
             # 2. 基本面分析
             if self.akshare:
@@ -297,16 +486,18 @@ class InteractiveMarketAnalyzer:
                 fundamentals = self.get_stock_fundamentals_akshare(symbol)
                 stock_analysis["fundamentals"] = fundamentals
             
-            # 3. 获取股票简介
-            try:
-                profile = await self.analyzer.get_stock_profile(
-                    symbol,
-                    provider="yfinance" if market_type == "A股" else "fmp",
-                    market_type=market_type
-                )
-                stock_analysis["profile"] = profile
-            except:
-                pass
+            # 3. 获取股票简介（已忽略，跳过获取概念板块信息）
+            # 注意：此步骤已禁用，不再获取股票简介和概念板块信息
+            # try:
+            #     profile = await self.analyzer.get_stock_profile(
+            #         symbol,
+            #         provider="yfinance" if market_type == "A股" else "fmp",
+            #         market_type=market_type
+            #     )
+            #     stock_analysis["profile"] = profile
+            # except:
+            #     pass
+            stock_analysis["profile"] = {}  # 设置为空字典，保持数据结构一致
             
             results["stocks"].append(stock_analysis)
             print()
@@ -346,19 +537,43 @@ class InteractiveMarketAnalyzer:
                 for factor in timing_info.get("factors", []):
                     report.append(f"    {factor}")
                 
-                # 技术指标
+                # 技术指标（右侧交易风格）
                 indicators = timing.get("indicators", {})
                 if indicators:
-                    report.append(f"\n  技术指标:")
+                    report.append(f"\n  技术指标（右侧交易）:")
                     if "MA" in indicators:
                         ma = indicators["MA"]
-                        report.append(f"    均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}, 趋势={ma.get('trend', 'N/A')}")
+                        ma_str = f"    均线: MA5={ma.get('MA5', 0):.2f}, MA20={ma.get('MA20', 0):.2f}"
+                        if ma.get('MA60'):
+                            ma_str += f", MA60={ma.get('MA60', 0):.2f}"
+                        ma_str += f", 趋势={ma.get('trend', 'N/A')}"
+                        if ma.get('bullish_arrangement'):
+                            ma_str += ", 多头排列✅"
+                        if ma.get('price_above_ma'):
+                            ma_str += ", 价格在均线之上✅"
+                        report.append(ma_str)
                     if "RSI" in indicators:
                         rsi = indicators["RSI"]
                         report.append(f"    RSI: {rsi.get('value', 0):.2f} ({rsi.get('signal', 'N/A')})")
                     if "PricePosition" in indicators:
                         pos = indicators["PricePosition"]
                         report.append(f"    价格位置: {pos.get('position_percent', 0):.1f}% ({pos.get('signal', 'N/A')})")
+                    if "Breakthrough" in indicators:
+                        bt = indicators["Breakthrough"]
+                        bt_str = "    突破: "
+                        if bt.get('breakthrough_60d'):
+                            bt_str += "突破60日高点✅"
+                        elif bt.get('breakthrough_20d'):
+                            bt_str += "突破20日高点✅"
+                        else:
+                            bt_str += "未突破近期高点"
+                        report.append(bt_str)
+                    if "Momentum" in indicators:
+                        mom = indicators["Momentum"]
+                        report.append(f"    动量: 5日={mom.get('momentum_5d', 0):.2f}%, 20日={mom.get('momentum_20d', 0):.2f}% ({mom.get('signal', 'N/A')})")
+                    if "Volume" in indicators:
+                        vol = indicators["Volume"]
+                        report.append(f"    成交量: 量比={vol.get('ratio', 1):.2f} ({vol.get('signal', 'N/A')})")
             
             # 基本面
             fundamentals = stock.get("fundamentals", {})
