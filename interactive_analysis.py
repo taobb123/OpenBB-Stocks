@@ -1815,110 +1815,228 @@ class InteractiveMarketAnalyzer:
         
         # 收集符合右侧交易策略的买入股票信息
         buy_stocks_info = []
+        filtered_stocks = []  # 记录被过滤的股票及其原因
         
-        for stock in stocks:
-            symbol = stock.get("symbol", "")
-            profile = stock.get("profile", {})
-            stock_name = profile.get("name", symbol) if isinstance(profile, dict) else symbol
-            
-            timing = stock.get("timing", {})
-            if timing and "timing" in timing:
-                timing_info = timing["timing"]
-                recommendation = timing_info.get("recommendation", "观望")
-                timing_score = timing_info.get("score", 0)
-                
-                # 右侧交易策略筛选条件
-                ma_bullish = False
-                price_above_ma = False
-                rsi_strong = False
-                price_position_ok = False
-                breakthrough = False
-                momentum_strong = False
-                volume_ok = False
-                volume_ratio = 1.0  # 初始化默认值
-                rsi_value = None
-                position_percent = None
-                bt_data = {}
-                mom_data = {}
-                vol_data = {}
-                
-                if "indicators" in timing:
-                    indicators = timing["indicators"]
+        try:
+            for stock in stocks:
+                try:
+                    # 安全获取股票代码
+                    symbol = str(stock.get("symbol", "")).strip()
+                    if not symbol:
+                        continue
                     
-                    # 检查各项条件
-                    ma_data = indicators.get("MA", {})
-                    ma_bullish = ma_data.get("bullish_arrangement", False)
-                    price_above_ma = ma_data.get("price_above_ma", False)
-                    
-                    rsi_data = indicators.get("RSI", {})
-                    rsi_value = rsi_data.get("value")
-                    rsi_strong = rsi_value and 50 <= rsi_value <= 70
-                    
-                    pos_data = indicators.get("PricePosition", {})
-                    position_percent = pos_data.get("position_percent", 0)
-                    price_position_ok = 50 <= position_percent <= 85
-                    
-                    bt_data = indicators.get("Breakthrough", {})
-                    breakthrough = bt_data.get("breakthrough_60d", False) or bt_data.get("breakthrough_20d", False)
-                    
-                    mom_data = indicators.get("Momentum", {})
-                    momentum_strong = mom_data.get("signal") == "强势"
-                    
-                    vol_data = indicators.get("Volume", {})
-                    volume_ratio = vol_data.get("ratio")
-                    if volume_ratio is None:
-                        volume_ratio = 1.0
-                    volume_ok = volume_ratio > 1.5
-                
-                # 右侧交易策略筛选：至少满足3个条件，且时机评分>=6
-                # 确保所有值都是布尔类型，避免 None 值导致计算错误
-                right_side_conditions = sum([
-                    bool(ma_bullish),
-                    bool(price_above_ma),
-                    bool(rsi_strong),
-                    bool(price_position_ok),
-                    bool(breakthrough),
-                    bool(momentum_strong),
-                    bool(volume_ok)
-                ])
-                
-                # 只保存符合右侧交易策略的股票
-                if right_side_conditions >= 3 and timing_score >= 6:
-                    # 收集买入理由
-                    buy_reasons = []
-                    if ma_bullish:
-                        buy_reasons.append("均线多头排列")
-                    if price_above_ma:
-                        buy_reasons.append("价格位于均线之上")
-                    if rsi_strong and rsi_value is not None:
-                        buy_reasons.append(f"RSI处于强势区间 ({rsi_value:.2f})")
-                    if price_position_ok and position_percent is not None:
-                        buy_reasons.append(f"价格处于中高位 ({position_percent:.1f}%)")
-                    if breakthrough:
-                        if bt_data.get("breakthrough_60d"):
-                            buy_reasons.append("突破60日高点")
-                        elif bt_data.get("breakthrough_20d"):
-                            buy_reasons.append("突破20日高点")
-                    if momentum_strong:
-                        momentum_5d = mom_data.get("momentum_5d")
-                        momentum_20d = mom_data.get("momentum_20d")
-                        if momentum_5d is not None and momentum_20d is not None:
-                            buy_reasons.append(f"动量强劲 (5日: {momentum_5d:.2f}%, 20日: {momentum_20d:.2f}%)")
+                    # 安全获取股票名称
+                    profile = stock.get("profile", {})
+                    if isinstance(profile, dict):
+                        stock_name = str(profile.get("name", symbol)).strip()
                     else:
-                        buy_reasons.append("动量强劲")
-                    if volume_ok:
-                        # volume_ratio 已在上面初始化，确保不为 None
-                        if volume_ratio is None:
-                            volume_ratio = 1.0
-                        buy_reasons.append(f"成交量放大 ({volume_ratio:.2f}倍)")
+                        stock_name = str(symbol).strip()
                     
-                    buy_stocks_info.append({
-                        "symbol": symbol,
-                        "name": stock_name,
-                        "score": timing_score,
-                        "reasons": buy_reasons,
-                        "conditions_met": right_side_conditions
-                    })
+                    if not stock_name:
+                        stock_name = symbol
+                    
+                    timing = stock.get("timing", {})
+                    if not timing or "timing" not in timing:
+                        continue
+                    
+                    timing_info = timing["timing"]
+                    if not isinstance(timing_info, dict):
+                        continue
+                    
+                    # 安全获取时机评分，确保是数字类型
+                    timing_score = timing_info.get("score")
+                    if timing_score is None:
+                        timing_score = 0
+                    try:
+                        timing_score = float(timing_score)
+                    except (ValueError, TypeError):
+                        timing_score = 0
+                    
+                    # 右侧交易策略筛选条件
+                    ma_bullish = False
+                    price_above_ma = False
+                    rsi_strong = False
+                    price_position_ok = False
+                    breakthrough = False
+                    momentum_strong = False
+                    volume_ok = False
+                    volume_ratio = 1.0  # 初始化默认值
+                    rsi_value = None
+                    position_percent = None
+                    bt_data = {}
+                    mom_data = {}
+                    vol_data = {}
+                    
+                    if "indicators" in timing and isinstance(timing["indicators"], dict):
+                        indicators = timing["indicators"]
+                        
+                        # 检查各项条件
+                        ma_data = indicators.get("MA", {})
+                        if isinstance(ma_data, dict):
+                            ma_bullish = bool(ma_data.get("bullish_arrangement", False))
+                            price_above_ma = bool(ma_data.get("price_above_ma", False))
+                        
+                        rsi_data = indicators.get("RSI", {})
+                        if isinstance(rsi_data, dict):
+                            rsi_value = rsi_data.get("value")
+                            # 安全比较：确保 rsi_value 是数字类型
+                            if rsi_value is not None:
+                                try:
+                                    rsi_value = float(rsi_value)
+                                    rsi_strong = 50 <= rsi_value <= 70
+                                except (ValueError, TypeError):
+                                    rsi_value = None
+                                    rsi_strong = False
+                            else:
+                                rsi_strong = False
+                        
+                        pos_data = indicators.get("PricePosition", {})
+                        if isinstance(pos_data, dict):
+                            position_percent = pos_data.get("position_percent")
+                            if position_percent is not None:
+                                try:
+                                    position_percent = float(position_percent)
+                                    price_position_ok = 50 <= position_percent <= 85
+                                except (ValueError, TypeError):
+                                    position_percent = None
+                                    price_position_ok = False
+                            else:
+                                price_position_ok = False
+                        
+                        bt_data = indicators.get("Breakthrough", {})
+                        if isinstance(bt_data, dict):
+                            breakthrough = bool(bt_data.get("breakthrough_60d", False)) or bool(bt_data.get("breakthrough_20d", False))
+                        
+                        mom_data = indicators.get("Momentum", {})
+                        if isinstance(mom_data, dict):
+                            momentum_strong = str(mom_data.get("signal", "")) == "强势"
+                        
+                        vol_data = indicators.get("Volume", {})
+                        if isinstance(vol_data, dict):
+                            volume_ratio = vol_data.get("ratio")
+                            if volume_ratio is None:
+                                volume_ratio = 1.0
+                            else:
+                                try:
+                                    volume_ratio = float(volume_ratio)
+                                except (ValueError, TypeError):
+                                    volume_ratio = 1.0
+                            volume_ok = volume_ratio > 1.5
+                    
+                    # 右侧交易策略筛选：至少满足3个条件，且时机评分>=6
+                    # 确保所有值都是布尔类型，避免 None 值导致计算错误
+                    right_side_conditions = sum([
+                        bool(ma_bullish),
+                        bool(price_above_ma),
+                        bool(rsi_strong),
+                        bool(price_position_ok),
+                        bool(breakthrough),
+                        bool(momentum_strong),
+                        bool(volume_ok)
+                    ])
+                    
+                    # 记录筛选信息（用于调试）
+                    filter_reasons = []
+                    if right_side_conditions < 3:
+                        filter_reasons.append(f"右侧交易条件不足（{right_side_conditions}/7，需要>=3）")
+                    if timing_score < 6:
+                        filter_reasons.append(f"时机评分不足（{timing_score}，需要>=6）")
+                    
+                    # 只保存符合右侧交易策略的股票
+                    if right_side_conditions >= 3 and timing_score >= 6:
+                        # 收集买入理由
+                        buy_reasons = []
+                        if ma_bullish:
+                            buy_reasons.append("均线多头排列")
+                        if price_above_ma:
+                            buy_reasons.append("价格位于均线之上")
+                        if rsi_strong and rsi_value is not None:
+                            try:
+                                buy_reasons.append(f"RSI处于强势区间 ({rsi_value:.2f})")
+                            except (ValueError, TypeError):
+                                buy_reasons.append("RSI处于强势区间")
+                        if price_position_ok and position_percent is not None:
+                            try:
+                                buy_reasons.append(f"价格处于中高位 ({position_percent:.1f}%)")
+                            except (ValueError, TypeError):
+                                buy_reasons.append("价格处于中高位")
+                        if breakthrough:
+                            if isinstance(bt_data, dict):
+                                if bt_data.get("breakthrough_60d"):
+                                    buy_reasons.append("突破60日高点")
+                                elif bt_data.get("breakthrough_20d"):
+                                    buy_reasons.append("突破20日高点")
+                        if momentum_strong:
+                            if isinstance(mom_data, dict):
+                                momentum_5d = mom_data.get("momentum_5d")
+                                momentum_20d = mom_data.get("momentum_20d")
+                                if momentum_5d is not None and momentum_20d is not None:
+                                    try:
+                                        momentum_5d = float(momentum_5d)
+                                        momentum_20d = float(momentum_20d)
+                                        buy_reasons.append(f"动量强劲 (5日: {momentum_5d:.2f}%, 20日: {momentum_20d:.2f}%)")
+                                    except (ValueError, TypeError):
+                                        buy_reasons.append("动量强劲")
+                                else:
+                                    buy_reasons.append("动量强劲")
+                            else:
+                                buy_reasons.append("动量强劲")
+                        if volume_ok:
+                            # volume_ratio 已在上面初始化，确保不为 None
+                            if volume_ratio is None:
+                                volume_ratio = 1.0
+                            try:
+                                volume_ratio = float(volume_ratio)
+                                buy_reasons.append(f"成交量放大 ({volume_ratio:.2f}倍)")
+                            except (ValueError, TypeError):
+                                buy_reasons.append("成交量放大")
+                        
+                        buy_stocks_info.append({
+                            "symbol": symbol,
+                            "name": stock_name,
+                            "score": timing_score,
+                            "reasons": buy_reasons,
+                            "conditions_met": right_side_conditions
+                        })
+                    else:
+                        # 记录被过滤的股票信息
+                        filtered_stocks.append({
+                            "symbol": symbol,
+                            "name": stock_name,
+                            "score": timing_score,
+                            "conditions_met": right_side_conditions,
+                            "filter_reasons": filter_reasons,
+                            "details": {
+                                "ma_bullish": ma_bullish,
+                                "price_above_ma": price_above_ma,
+                                "rsi_strong": rsi_strong,
+                                "price_position_ok": price_position_ok,
+                                "breakthrough": breakthrough,
+                                "momentum_strong": momentum_strong,
+                                "volume_ok": volume_ok
+                            }
+                        })
+                except Exception as stock_error:
+                    # 单只股票处理失败不影响其他股票
+                    print(f"  ⚠️ 处理股票 {stock.get('symbol', 'UNKNOWN')} 时出错: {str(stock_error)[:100]}")
+                    continue
+        
+        except Exception as e:
+            print(f"  ⚠️ 收集买入建议时出错: {str(e)[:200]}")
+            return
+        
+        # 输出调试信息
+        if filtered_stocks:
+            print(f"  📊 筛选统计: 共分析 {len(stocks)} 只股票")
+            print(f"    符合条件: {len(buy_stocks_info)} 只")
+            print(f"    被过滤: {len(filtered_stocks)} 只")
+            # 显示前5只被过滤的股票信息
+            for i, filtered in enumerate(filtered_stocks[:5], 1):
+                print(f"      {i}. {filtered['symbol']} (评分: {filtered['score']}, 条件: {filtered['conditions_met']}/7)")
+                for reason in filtered['filter_reasons']:
+                    print(f"         - {reason}")
+            if len(filtered_stocks) > 5:
+                print(f"      ... 还有 {len(filtered_stocks) - 5} 只股票被过滤")
         
         # 保存到 Buy.txt 文件（追加模式）
         if buy_stocks_info:
@@ -1929,20 +2047,128 @@ class InteractiveMarketAnalyzer:
                     f.write(f"{'='*60}\n\n")
                     
                     for stock_info in buy_stocks_info:
-                        f.write(f"股票代码: {stock_info['symbol']}\n")
-                        f.write(f"股票名称: {stock_info['name']}\n")
-                        f.write(f"时机评分: {stock_info['score']}\n")
-                        f.write(f"满足条件数: {stock_info['conditions_met']}/7\n")
-                        f.write(f"买入理由:\n")
-                        for reason in stock_info['reasons']:
-                            f.write(f"  - {reason}\n")
-                        f.write("\n")
+                        try:
+                            # 安全转换所有值为字符串
+                            symbol_str = str(stock_info.get('symbol', 'N/A'))
+                            name_str = str(stock_info.get('name', symbol_str))
+                            score = stock_info.get('score', 0)
+                            try:
+                                score_str = str(int(score)) if isinstance(score, (int, float)) else str(score)
+                            except (ValueError, TypeError):
+                                score_str = "0"
+                            
+                            conditions_met = stock_info.get('conditions_met', 0)
+                            try:
+                                conditions_str = str(int(conditions_met)) if isinstance(conditions_met, (int, float)) else str(conditions_met)
+                            except (ValueError, TypeError):
+                                conditions_str = "0"
+                            
+                            f.write(f"股票代码: {symbol_str}\n")
+                            f.write(f"股票名称: {name_str}\n")
+                            f.write(f"时机评分: {score_str}\n")
+                            f.write(f"满足条件数: {conditions_str}/7\n")
+                            f.write(f"买入理由:\n")
+                            
+                            reasons = stock_info.get('reasons', [])
+                            if isinstance(reasons, list):
+                                for reason in reasons:
+                                    reason_str = str(reason) if reason else ""
+                                    if reason_str:
+                                        f.write(f"  - {reason_str}\n")
+                            f.write("\n")
+                        except Exception as write_error:
+                            # 单条记录写入失败不影响其他记录
+                            print(f"  ⚠️ 写入股票 {stock_info.get('symbol', 'UNKNOWN')} 信息时出错: {str(write_error)[:100]}")
+                            continue
                     
                     f.write(f"{'='*60}\n\n")
                 
                 print(f"  ✅ 已将 {len(buy_stocks_info)} 只符合右侧交易策略的股票追加到 Buy.txt")
+            except IOError as io_error:
+                print(f"  ⚠️ 文件写入失败（IO错误）: {str(io_error)[:200]}")
+            except PermissionError as perm_error:
+                print(f"  ⚠️ 文件写入失败（权限错误）: {str(perm_error)[:200]}")
             except Exception as e:
-                print(f"  ⚠️ 保存买入建议失败: {e}")
+                print(f"  ⚠️ 保存买入建议失败: {str(e)[:200]}")
+                import traceback
+                print(f"  详细错误: {traceback.format_exc()[:500]}")
+        else:
+            # 如果没有符合严格条件的股票，尝试保存所有"买入"建议的股票
+            print(f"  ⚠️ 没有股票完全符合右侧交易策略（需要评分>=6且条件>=3）")
+            print(f"  📋 尝试保存所有'买入'建议的股票...")
+            
+            buy_recommendations = []
+            for stock in stocks:
+                try:
+                    symbol = str(stock.get("symbol", "")).strip()
+                    if not symbol:
+                        continue
+                    
+                    profile = stock.get("profile", {})
+                    if isinstance(profile, dict):
+                        stock_name = str(profile.get("name", symbol)).strip()
+                    else:
+                        stock_name = str(symbol).strip()
+                    
+                    if not stock_name:
+                        stock_name = symbol
+                    
+                    timing = stock.get("timing", {})
+                    if not timing or "timing" not in timing:
+                        continue
+                    
+                    timing_info = timing["timing"]
+                    if not isinstance(timing_info, dict):
+                        continue
+                    
+                    recommendation = timing_info.get("recommendation", "")
+                    timing_score = timing_info.get("score", 0)
+                    
+                    try:
+                        timing_score = float(timing_score)
+                    except (ValueError, TypeError):
+                        timing_score = 0
+                    
+                    # 如果建议是"买入"，即使不完全符合右侧交易策略也保存
+                    if recommendation == "买入":
+                        factors = timing_info.get("factors", [])
+                        buy_recommendations.append({
+                            "symbol": symbol,
+                            "name": stock_name,
+                            "score": timing_score,
+                            "factors": factors
+                        })
+                except Exception:
+                    continue
+            
+            # 保存所有"买入"建议的股票
+            if buy_recommendations:
+                try:
+                    with open("Buy.txt", "a", encoding="utf-8") as f:
+                        f.write(f"\n{'='*60}\n")
+                        f.write(f"买入建议统计 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"{'='*60}\n")
+                        f.write(f"买入建议: {len(buy_recommendations)} 只\n\n")
+                        
+                        for rec in buy_recommendations:
+                            f.write(f"{rec['symbol']} (评分: {int(rec['score'])}):\n")
+                            for factor in rec.get('factors', [])[:10]:  # 最多显示10个因素
+                                f.write(f"  - {factor}\n")
+                            f.write("\n")
+                        
+                        f.write(f"{'='*60}\n")
+                    
+                    print(f"  ✅ 已将 {len(buy_recommendations)} 只'买入'建议的股票追加到 Buy.txt")
+                except IOError as io_error:
+                    print(f"  ⚠️ 文件写入失败（IO错误）: {str(io_error)[:200]}")
+                except PermissionError as perm_error:
+                    print(f"  ⚠️ 文件写入失败（权限错误）: {str(perm_error)[:200]}")
+                except Exception as e:
+                    print(f"  ⚠️ 保存买入建议失败: {str(e)[:200]}")
+                    import traceback
+                    print(f"  详细错误: {traceback.format_exc()[:500]}")
+            else:
+                print(f"  ⚠️ 没有找到任何'买入'建议的股票")
     
     async def interactive_workflow(self):
         """
@@ -2030,9 +2256,36 @@ class InteractiveMarketAnalyzer:
         
         # 保存 JSON 数据（使用相同的文件名，但扩展名为.json）
         json_filename = filename.replace(".txt", ".json")
-        with open(json_filename, "w", encoding="utf-8") as f:
-            json.dump(analysis, f, ensure_ascii=False, indent=2)
-        print(f"✅ 数据已保存到: {json_filename}")
+        try:
+            # 自定义 JSON encoder 来处理 NaN 和 Infinity
+            import math
+            
+            def clean_for_json(obj):
+                """递归清理对象，将 NaN 和 Infinity 转换为 None"""
+                if isinstance(obj, dict):
+                    return {key: clean_for_json(value) for key, value in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [clean_for_json(item) for item in obj]
+                elif isinstance(obj, float):
+                    if math.isnan(obj) or math.isinf(obj):
+                        return None
+                    return obj
+                elif hasattr(obj, '__dict__'):
+                    # 处理对象
+                    return clean_for_json(obj.__dict__)
+                else:
+                    return obj
+            
+            # 清理数据中的 NaN 和 Infinity
+            cleaned_analysis = clean_for_json(analysis)
+            
+            with open(json_filename, "w", encoding="utf-8") as f:
+                json.dump(cleaned_analysis, f, ensure_ascii=False, indent=2)
+            print(f"✅ 数据已保存到: {json_filename}")
+        except Exception as json_error:
+            print(f"⚠️ 保存 JSON 数据失败: {str(json_error)[:200]}")
+            import traceback
+            print(f"  详细错误: {traceback.format_exc()[:500]}")
         
         # 保存买入建议统计到 Buy.txt（追加模式）
         self._save_buy_recommendations(analysis.get("stocks", []))

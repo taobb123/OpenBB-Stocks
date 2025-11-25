@@ -30,40 +30,80 @@ def get_extract_function():
 def make_json_serializable(obj):
     """
     递归地将对象转换为 JSON 可序列化的格式
-    处理 numpy、pandas 类型和 Python bool 类型
+    处理 numpy、pandas 类型、Python bool 类型和 NaN/Infinity 值
     """
+    import math
+    
     # 处理 numpy 类型
     if isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
-        return float(obj)
+        val = float(obj)
+        # 处理 NaN 和 Infinity
+        if math.isnan(val):
+            return None
+        elif math.isinf(val):
+            return None
+        return val
     elif isinstance(obj, (np.bool_, bool)):
         # 确保所有布尔值都转换为 Python bool
         return bool(obj)
     elif isinstance(obj, np.ndarray):
-        return obj.tolist()
+        # 处理 numpy 数组，将 NaN 转换为 None
+        result = obj.tolist()
+        # 递归处理结果中的 NaN
+        return make_json_serializable(result)
     elif isinstance(obj, pd.Series):
-        return obj.to_dict()
+        # 处理 pandas Series，将 NaN 转换为 None
+        # 使用 fillna 将 NaN 替换为 None，然后转换为字典
+        result = obj.fillna(None).to_dict()
+        # 递归处理结果中的 NaN（以防 fillna 没有完全处理）
+        return make_json_serializable(result)
     elif isinstance(obj, pd.DataFrame):
-        return obj.to_dict('records')
+        # 处理 pandas DataFrame，将 NaN 转换为 None
+        # 使用 fillna 将 NaN 替换为 None，然后转换为字典
+        result = obj.fillna(None).to_dict('records')
+        # 递归处理结果中的 NaN（以防 fillna 没有完全处理）
+        return make_json_serializable(result)
     # 处理字典
     elif isinstance(obj, dict):
         return {key: make_json_serializable(value) for key, value in obj.items()}
     # 处理列表和元组
     elif isinstance(obj, (list, tuple)):
         return [make_json_serializable(item) for item in obj]
-    # 处理基本类型
-    elif isinstance(obj, (int, float, str, type(None))):
+    # 处理基本类型（包括 NaN 和 Infinity 检查）
+    elif isinstance(obj, float):
+        # 处理 Python float 类型的 NaN 和 Infinity
+        if math.isnan(obj):
+            return None
+        elif math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, (int, str, type(None))):
         return obj
     # 对于其他类型，尝试转换为字符串或返回 None
     else:
         try:
-            # 尝试 JSON 序列化测试
-            json.dumps(obj)
+            # 尝试 JSON 序列化测试（使用自定义的 default 函数处理 NaN）
+            def default_handler(o):
+                if isinstance(o, float):
+                    if math.isnan(o) or math.isinf(o):
+                        return None
+                return str(o)
+            
+            json.dumps(obj, default=default_handler)
+            # 如果序列化成功，递归处理以确保所有 NaN 都被替换
+            if isinstance(obj, dict):
+                return make_json_serializable(obj)
+            elif isinstance(obj, (list, tuple)):
+                return make_json_serializable(obj)
             return obj
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
             # 如果无法序列化，尝试转换为字符串
             try:
+                # 如果是包含 NaN 的复杂对象，尝试递归处理
+                if hasattr(obj, '__dict__'):
+                    return make_json_serializable(obj.__dict__)
                 return str(obj)
             except:
                 return None
@@ -207,8 +247,19 @@ def analyze_custom_stocks_api(request):
         
         # 执行异步函数
         result = asyncio.run(run_analysis())
-        # 确保所有数据都是 JSON 可序列化的
+        # 确保所有数据都是 JSON 可序列化的（多次清理以确保所有 NaN 都被处理）
         result = make_json_serializable(result)
+        # 再次清理，确保没有遗漏的 NaN 值
+        result = make_json_serializable(result)
+        
+        # 最终验证：尝试序列化以确保没有 NaN
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError) as json_error:
+            print(f"⚠️ JSON 序列化验证失败: {str(json_error)[:200]}")
+            # 如果仍然失败，进行最后一次深度清理
+            result = make_json_serializable(result)
+        
         return JsonResponse(result)
         
     except Exception as e:
@@ -269,8 +320,19 @@ def run_full_market_analysis_api(request):
         
         # 执行异步函数
         result = asyncio.run(run_analysis())
-        # 确保所有数据都是 JSON 可序列化的
+        # 确保所有数据都是 JSON 可序列化的（多次清理以确保所有 NaN 都被处理）
         result = make_json_serializable(result)
+        # 再次清理，确保没有遗漏的 NaN 值
+        result = make_json_serializable(result)
+        
+        # 最终验证：尝试序列化以确保没有 NaN
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError) as json_error:
+            print(f"⚠️ JSON 序列化验证失败: {str(json_error)[:200]}")
+            # 如果仍然失败，进行最后一次深度清理
+            result = make_json_serializable(result)
+        
         return JsonResponse(result)
         
     except Exception as e:
