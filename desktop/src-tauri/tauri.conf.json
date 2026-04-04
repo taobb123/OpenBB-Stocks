@@ -5,7 +5,7 @@
   "identifier": "co.openbb.platform",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1470",
+    "devUrl": "http://localhost:1472",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },

@@ -1,7 +1,37 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useRef,
+	type ChangeEventHandler,
+} from "react";
 import { Button } from "@openbb/ui-pro";
 import { API_BASE_URL, getApiBaseUrlWithoutPath } from "../config/api";
+import {
+	parsePoolFileContent,
+	stocksFromAnalysisData,
+	StockPoolChartGrid,
+	type StockChartRow,
+} from "../components/StockPoolCharts";
+
+const LS_STOCK_POOL_PATH = "stocks_pool_file_path";
+const DEFAULT_STOCK_POOL_PATH =
+	"D:\\RunTest\\pyb124\\py_rotation_trade\\A_stocks\\ma_strategy_project\\pybroker_integration\\stocks_pool.txt";
+
+function isTauriRuntime(): boolean {
+	if (typeof window === "undefined") return false;
+	return "__TAURI__" in window || "__TAURI_INTERNALS__" in window;
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+	if (size <= 0) return [arr];
+	const out: T[][] = [];
+	for (let i = 0; i < arr.length; i += size) {
+		out.push(arr.slice(i, i + size));
+	}
+	return out;
+}
 
 interface ExtractStockCodesResponse {
 	success: boolean;
@@ -30,6 +60,42 @@ function MarketAnalysisRest() {
 	const [isFileReportModalOpen, setFileReportModalOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [apiReady, setApiReady] = useState(false);
+
+	const [poolFilePath, setPoolFilePath] = useState(() => {
+		try {
+			return (
+				localStorage.getItem(LS_STOCK_POOL_PATH) || DEFAULT_STOCK_POOL_PATH
+			);
+		} catch {
+			return DEFAULT_STOCK_POOL_PATH;
+		}
+	});
+	const [poolCodes, setPoolCodes] = useState<string[]>([]);
+	const [poolLoadMessage, setPoolLoadMessage] = useState<string | null>(null);
+	const [chartStocks, setChartStocks] = useState<StockChartRow[]>([]);
+	const [chartPage, setChartPage] = useState(1);
+	const [chartsPerPage, setChartsPerPage] = useState(6);
+	const [batchSize, setBatchSize] = useState(8);
+	const [batchLoading, setBatchLoading] = useState(false);
+	const [batchProgress, setBatchProgress] = useState<{
+		current: number;
+		total: number;
+	} | null>(null);
+	const poolFileInputRef = useRef<HTMLInputElement>(null);
+	const analysisAbortRef = useRef<AbortController | null>(null);
+
+	const stopAllAnalysis = useCallback(() => {
+		analysisAbortRef.current?.abort();
+		analysisAbortRef.current = null;
+		setLoading(false);
+		setBatchLoading(false);
+		setFullAnalysisLoading(false);
+		setBatchProgress(null);
+		setError("已停止分析（已取消前端请求；若后端已开始运算，该次请求仍可能跑完）。");
+	}, []);
+
+	const analysisRunning = loading || batchLoading || fullAnalysisLoading;
+
 	const hasFullReport =
 		!!fullAnalysisResult &&
 		(Boolean(fullAnalysisResult.report) ||
@@ -87,6 +153,147 @@ function MarketAnalysisRest() {
 		checkApi();
 	}, []);
 
+	useEffect(() => {
+		if (chartStocks.length === 0) return;
+		const totalPages = Math.max(
+			1,
+			Math.ceil(chartStocks.length / Math.max(1, chartsPerPage)),
+		);
+		if (chartPage > totalPages) {
+			setChartPage(totalPages);
+		}
+	}, [chartStocks.length, chartsPerPage, chartPage]);
+
+	const persistPoolPath = useCallback((path: string) => {
+		setPoolFilePath(path);
+		try {
+			localStorage.setItem(LS_STOCK_POOL_PATH, path);
+		} catch {
+			/* ignore */
+		}
+	}, []);
+
+	const loadPoolFromText = useCallback((text: string, sourceLabel?: string) => {
+		const codes = parsePoolFileContent(text);
+		setPoolCodes(codes);
+		const base =
+			codes.length > 0
+				? `已解析 ${codes.length} 只股票代码（去重后）`
+				: "未解析到有效 6 位股票代码";
+		setPoolLoadMessage(sourceLabel ? `${sourceLabel} — ${base}` : base);
+		setChartStocks([]);
+		setChartPage(1);
+	}, []);
+
+	const readPoolFromDiskPath = async () => {
+		const p = poolFilePath.trim();
+		if (!p) {
+			setPoolLoadMessage("请先填写股票池文件路径");
+			return;
+		}
+		if (!isTauriRuntime()) {
+			setPoolLoadMessage(
+				"当前在浏览器中打开：无法直接读本地路径。请使用 Tauri 桌面窗口，或点击下方「选择 .txt 文件」。",
+			);
+			return;
+		}
+		try {
+			const { invoke } = await import("@tauri-apps/api/core");
+			const text = await invoke<string>("read_utf8_text_file", { path: p });
+			loadPoolFromText(text, `磁盘路径 ${p}`);
+		} catch (e: unknown) {
+			const msg = e instanceof Error ? e.message : String(e);
+			setPoolLoadMessage(`读取失败: ${msg}`);
+		}
+	};
+
+	const onPickPoolFile: ChangeEventHandler<HTMLInputElement> = (ev) => {
+		const file = ev.target.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			const text = typeof reader.result === "string" ? reader.result : "";
+			loadPoolFromText(text, `文件「${file.name}」`);
+		};
+		reader.onerror = () =>
+			setPoolLoadMessage(`读取文件失败: ${reader.error?.message ?? "未知错误"}`);
+		reader.readAsText(file, "UTF-8");
+		ev.target.value = "";
+	};
+
+	const runBatchedChartAnalysis = async () => {
+		if (!apiReady) {
+			setError("API 未就绪，请确保后端服务器正在运行");
+			return;
+		}
+		if (poolCodes.length === 0) {
+			setError("请先从股票池文件加载代码列表");
+			return;
+		}
+		const size = Math.min(40, Math.max(1, batchSize));
+		const chunks = chunkArray(poolCodes, size);
+		analysisAbortRef.current?.abort();
+		const ac = new AbortController();
+		analysisAbortRef.current = ac;
+		const { signal } = ac;
+
+		setBatchLoading(true);
+		setError(null);
+		setBatchProgress({ current: 0, total: chunks.length });
+		const merged: StockChartRow[] = [];
+		try {
+			for (let i = 0; i < chunks.length; i++) {
+				if (signal.aborted) break;
+				setBatchProgress({ current: i + 1, total: chunks.length });
+				const analyzeUrl = `${API_BASE_URL}/analyze-custom-stocks/`
+					.replace(/\/+/g, "/")
+					.replace(":/", "://");
+				const analyzeResponse = await fetch(analyzeUrl, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						stock_codes: chunks[i],
+						market_type: "A股",
+					}),
+					signal,
+				});
+				if (signal.aborted) break;
+				const analysisData: AnalysisResponse = await analyzeResponse.json();
+				if (!analyzeResponse.ok || !analysisData.success) {
+					const errText =
+						analysisData.error ||
+						`批次 ${i + 1}/${chunks.length} HTTP ${analyzeResponse.status}`;
+					setError(errText);
+					break;
+				}
+				if (analysisData.data) {
+					merged.push(...stocksFromAnalysisData(analysisData.data));
+				}
+			}
+			if (merged.length > 0) {
+				setChartStocks(merged);
+				setChartPage(1);
+			} else if (!signal.aborted && chunks.length > 0) {
+				setChartStocks([]);
+			}
+		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "AbortError") {
+				if (merged.length > 0) {
+					setChartStocks(merged);
+					setChartPage(1);
+				}
+				return;
+			}
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBatchLoading(false);
+			setBatchProgress(null);
+			if (analysisAbortRef.current === ac) {
+				analysisAbortRef.current = null;
+			}
+		}
+	};
+
 	// 选项2：从文件读取股票代码
 	const handleFileMode = async () => {
 		if (!apiReady) {
@@ -98,6 +305,11 @@ function MarketAnalysisRest() {
 			setError("请输入或粘贴股票代码内容");
 			return;
 		}
+
+		analysisAbortRef.current?.abort();
+		const ac = new AbortController();
+		analysisAbortRef.current = ac;
+		const { signal } = ac;
 
 		setLoading(true);
 		setError(null);
@@ -113,6 +325,7 @@ function MarketAnalysisRest() {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ content: fileContent }),
+				signal,
 			});
 
 			const extractData: ExtractStockCodesResponse = await extractResponse.json();
@@ -120,10 +333,17 @@ function MarketAnalysisRest() {
 			if (!extractData.success || !extractData.stock_codes || extractData.count === 0) {
 				setError(extractData.error || "未能从内容中提取到股票代码");
 				setLoading(false);
+				if (analysisAbortRef.current === ac) analysisAbortRef.current = null;
 				return;
 			}
 
 			setExtractedCodes(extractData.stock_codes);
+
+			if (signal.aborted) {
+				setLoading(false);
+				if (analysisAbortRef.current === ac) analysisAbortRef.current = null;
+				return;
+			}
 
 			// 步骤2：运行分析
 			console.log(`正在调用分析 API: ${API_BASE_URL}/analyze-custom-stocks/`);
@@ -136,6 +356,7 @@ function MarketAnalysisRest() {
 					stock_codes: extractData.stock_codes,
 					market_type: "A股",
 				}),
+				signal,
 			});
 
 			console.log(`分析 API 响应状态: ${analyzeResponse.status} ${analyzeResponse.statusText}`);
@@ -181,6 +402,9 @@ function MarketAnalysisRest() {
 				}
 			}
 		} catch (err: any) {
+			if (err?.name === "AbortError") {
+				return;
+			}
 			console.error("分析错误:", err);
 			const errorMessage = err.message || "分析失败，请检查后端服务器是否运行";
 			const errorReport = `分析失败:\n${errorMessage}\n\n请确保:\n1. 后端服务器正在运行 (${getApiBaseUrlWithoutPath()})\n2. API 地址正确 (${API_BASE_URL})\n3. 网络连接正常\n4. 检查浏览器控制台查看详细错误信息`;
@@ -194,6 +418,9 @@ function MarketAnalysisRest() {
 			setError(errorMessage);
 		} finally {
 			setLoading(false);
+			if (analysisAbortRef.current === ac) {
+				analysisAbortRef.current = null;
+			}
 		}
 	};
 
@@ -203,6 +430,11 @@ function MarketAnalysisRest() {
 			setError("API 未就绪，请确保后端服务器正在运行");
 			return;
 		}
+
+		analysisAbortRef.current?.abort();
+		const ac = new AbortController();
+		analysisAbortRef.current = ac;
+		const { signal } = ac;
 
 		setFullAnalysisLoading(true);
 		setError(null);
@@ -216,6 +448,7 @@ function MarketAnalysisRest() {
 					index_query: "China",
 					market_type: "A股",
 				}),
+				signal,
 			});
 
 			if (!response.ok) {
@@ -226,18 +459,45 @@ function MarketAnalysisRest() {
 			// 将结果保存到独立的状态中，不会因为切换功能而消失
 			setFullAnalysisResult(data);
 		} catch (err: any) {
+			if (err?.name === "AbortError") {
+				return;
+			}
 			setError(err.message || "分析失败，请检查后端服务器是否运行");
 		} finally {
 			setFullAnalysisLoading(false);
+			if (analysisAbortRef.current === ac) {
+				analysisAbortRef.current = null;
+			}
 		}
 	};
 
 	return (
-		<div className="p-6 max-w-[1600px] mx-auto">
-			<h1 className="text-3xl font-bold mb-6 text-black">市场分析系统 (REST API)</h1>
+		<div className="flex flex-col min-h-0 w-full max-w-[1600px] mx-auto p-6 pb-12 box-border">
+			<h1 className="text-3xl font-bold mb-6 text-black shrink-0">
+				市场分析系统 (REST API)
+			</h1>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				<div className="space-y-6 lg:h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-2">
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+				<div className="space-y-6 lg:pr-2">
+			{analysisRunning && (
+				<div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
+					<p className="text-sm text-amber-950 font-medium">
+						分析进行中，可随时停止（将取消后续请求；当前批次若已发出则可能仍在后端执行）。
+					</p>
+					<Button
+						type="button"
+						onClick={stopAllAnalysis}
+						variant="outline"
+						className="shrink-0 border-red-300 text-red-800 hover:bg-red-50 font-medium"
+						style={{
+							color: "#991b1b",
+							borderColor: "#fca5a5",
+						}}
+					>
+						停止分析
+					</Button>
+				</div>
+			)}
 
 			{/* API 状态提示 */}
 			{!apiReady && (
@@ -422,6 +682,136 @@ function MarketAnalysisRest() {
 								/>
 							</div>
 
+							<div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
+								<h3 className="text-sm font-semibold text-black">
+									股票池批量监控（纯文本每行一个代码）
+								</h3>
+								<p className="text-xs text-gray-600 leading-relaxed">
+									在 Tauri 桌面窗口中可使用下方路径直接读取本机文件；若用浏览器打开本页，请使用「选择
+									.txt」。约 240 只股票将按批次请求后端，避免单次超时；分析完成后在页面底部以多图网格分页展示收盘价走势。
+								</p>
+								<div>
+									<label className="block text-xs font-medium text-gray-700 mb-1">
+										股票池文件路径（可修改，会记住到本机）
+									</label>
+									<input
+										type="text"
+										value={poolFilePath}
+										onChange={(e) => persistPoolPath(e.target.value)}
+										className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+										placeholder={DEFAULT_STOCK_POOL_PATH}
+									/>
+								</div>
+								<div className="flex flex-wrap gap-2 items-center">
+									<input
+										ref={poolFileInputRef}
+										type="file"
+										accept=".txt,text/plain"
+										className="hidden"
+										onChange={onPickPoolFile}
+									/>
+									<Button
+										type="button"
+										onClick={readPoolFromDiskPath}
+										variant="outline"
+										className="text-black border-gray-300"
+										style={{
+											color: "#000000",
+											borderColor: "#d1d5db",
+										}}
+									>
+										从路径读取
+									</Button>
+									<Button
+										type="button"
+										onClick={() => poolFileInputRef.current?.click()}
+										variant="outline"
+										className="text-black border-gray-300"
+										style={{
+											color: "#000000",
+											borderColor: "#d1d5db",
+										}}
+									>
+										选择 .txt 文件
+									</Button>
+									{poolCodes.length > 0 && (
+										<span className="text-sm text-gray-700">
+											已加载 {poolCodes.length} 只
+										</span>
+									)}
+								</div>
+								{poolLoadMessage && (
+									<p className="text-xs text-blue-900 bg-blue-50 border border-blue-100 rounded px-2 py-2">
+										{poolLoadMessage}
+									</p>
+								)}
+								<div className="grid grid-cols-2 sm:grid-cols-2 gap-4 max-w-lg">
+									<div>
+										<label className="block text-xs text-gray-600 mb-1">
+											每批分析数量（1–40）
+										</label>
+										<input
+											type="number"
+											min={1}
+											max={40}
+											value={batchSize}
+											onChange={(e) =>
+												setBatchSize(
+													Math.min(
+														40,
+														Math.max(1, Number(e.target.value) || 8),
+													),
+												)
+											}
+											className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black"
+										/>
+									</div>
+									<div>
+										<label className="block text-xs text-gray-600 mb-1">
+											每页走势图数量
+										</label>
+										<input
+											type="number"
+											min={1}
+											max={24}
+											value={chartsPerPage}
+											onChange={(e) =>
+												setChartsPerPage(
+													Math.min(
+														24,
+														Math.max(1, Number(e.target.value) || 6),
+													),
+												)
+											}
+											className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black"
+										/>
+									</div>
+								</div>
+								<Button
+									type="button"
+									onClick={runBatchedChartAnalysis}
+									disabled={
+										batchLoading ||
+										poolCodes.length === 0 ||
+										!apiReady
+									}
+									className="text-white font-medium"
+									style={{
+										color: "#ffffff",
+										backgroundColor:
+											batchLoading ||
+											poolCodes.length === 0 ||
+											!apiReady
+												? "#9ca3af"
+												: "#059669",
+									}}
+								>
+									{batchLoading && batchProgress
+										? `分批分析中 ${batchProgress.current}/${batchProgress.total}…`
+										: "分批分析并显示走势"}
+								</Button>
+							</div>
+
 							{extractedCodes.length > 0 && (
 								<div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
 									<p className="text-sm font-medium mb-2 text-blue-900">
@@ -497,8 +887,8 @@ function MarketAnalysisRest() {
 				</div>
 
 				{/* 右侧栏：报告展示区 */}
-				<div className="lg:col-span-2 grid gap-6">
-					<div className="bg-white rounded-lg shadow p-6 flex flex-col min-h-[280px] max-h-[55vh]">
+				<div className="lg:col-span-2 grid gap-6 min-h-0">
+					<div className="bg-white rounded-lg shadow p-6 flex flex-col min-h-[280px] max-h-[min(55vh,32rem)]">
 						<div className="flex items-center justify-between mb-4">
 							<h2 className="text-xl font-semibold text-black">文件分析结果</h2>
 							{hasFileReport && (
@@ -593,7 +983,7 @@ function MarketAnalysisRest() {
 						)}
 					</div>
 
-					<div className="bg-white rounded-lg shadow p-6 flex flex-col min-h-[280px] max-h-[55vh]">
+					<div className="bg-white rounded-lg shadow p-6 flex flex-col min-h-[280px] max-h-[min(55vh,32rem)]">
 						<div className="flex items-center justify-between mb-4">
 							<h2 className="text-xl font-semibold text-black">完整市场分析结果</h2>
 							{fullAnalysisResult?.report && (
@@ -663,6 +1053,17 @@ function MarketAnalysisRest() {
 					</div>
 				</div>
 			</div>
+
+			{chartStocks.length > 0 && (
+				<div className="mt-8 w-full">
+					<StockPoolChartGrid
+						stocks={chartStocks}
+						page={chartPage}
+						pageSize={chartsPerPage}
+						onPageChange={setChartPage}
+					/>
+				</div>
+			)}
 
 			{/* 文件分析弹窗 */}
 			{isFileReportModalOpen && analysisResult?.report && (

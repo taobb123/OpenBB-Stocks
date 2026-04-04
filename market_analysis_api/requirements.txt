@@ -3,6 +3,9 @@ djangorestframework>=3.14.0
 django-cors-headers>=4.0.0
 httpx>=0.24.0
 pandas>=2.0.0
+python-dotenv>=1.0.0
 # 可选依赖（如果使用 akshare）
 # akshare>=1.0.0
+# 可选：A 股补充数据源（设置环境变量 TUSHARE_TOKEN）
+# tushare>=1.4.0
 

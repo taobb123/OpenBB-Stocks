@@ -47,8 +47,8 @@ class MarketStructureAnalyzer:
         self.use_akshare = use_akshare and AKSHARE_AVAILABLE
         if self.use_akshare:
             try:
-                # 从环境变量获取 iTick token，如果未设置则使用默认值
-                itick_token = os.getenv("ITICK_TOKEN", "220b3fa701b740a98b2a661a543b9744a78831747db44c898cfca3a36b924332")
+                # 仅从环境变量读取 iTick；不设默认 token，避免无效密钥导致 401 噪声
+                itick_token = os.getenv("ITICK_TOKEN", "").strip() or None
                 self.akshare = AKShareDataSource(itick_token=itick_token)
                 if self.akshare.available:
                     print("✅ AKShare 数据源已启用")

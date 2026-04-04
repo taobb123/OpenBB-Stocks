@@ -628,7 +628,14 @@ class InteractiveMarketAnalyzer:
             
             # 转换 A 股代码格式为 OpenBB 格式（如果需要）
             openbb_symbol = self._convert_to_openbb_symbol(symbol) if len(symbol) == 6 else symbol
-            
+
+            # 纯 A 股六代码：不调用 MCP + yfinance（Yahoo 对 .SS/.SZ 易限流且不稳定）
+            use_yfinance_mcp = not (
+                symbol
+                and len(symbol) == 6
+                and symbol.isdigit()
+            )
+
             mcp_result = {
                 "symbol": symbol,
                 "openbb_symbol": openbb_symbol,
@@ -638,6 +645,8 @@ class InteractiveMarketAnalyzer:
                 "buy_signal": None,
                 "data_source": "mcp"  # 标记数据来源
             }
+            if not use_yfinance_mcp:
+                mcp_result["data_source"] = "akshare"
             
             # 优化：如果已有 akshare 数据，直接使用，跳过 MCP 调用以节省时间
             # 或者只尝试第一个工具名称，快速失败
@@ -668,8 +677,8 @@ class InteractiveMarketAnalyzer:
                             mcp_valuation_success = True
                             print(f"    ✅ 从 akshare 获取到估值数据")
                 
-                # 如果没有 akshare 数据，尝试 MCP（只尝试第一个工具名称，快速失败）
-                if not mcp_valuation_success:
+                # 如果没有 akshare 数据，尝试 MCP（仅非 A 股或显式需要时；A 股跳过 yfinance）
+                if not mcp_valuation_success and use_yfinance_mcp:
                     # 只尝试最可能的工具名称，避免长时间等待
                     tool_name = "equity_profile"
                     try:
@@ -704,7 +713,9 @@ class InteractiveMarketAnalyzer:
                     except (asyncio.TimeoutError, Exception) as e:
                         # 快速失败，不尝试其他工具名称
                         print(f"    ⚠️ MCP 估值工具调用失败或超时: {str(e)[:50]}")
-                
+                elif not mcp_valuation_success and not use_yfinance_mcp:
+                    print(f"    🇨🇳 A 股跳过 MCP/yfinance 估值（避免 Yahoo 限流）")
+
                 # 如果 MCP 获取失败，尝试使用 akshare 基本面数据（作为最后的 fallback）
                 if not mcp_valuation_success and fundamentals and isinstance(fundamentals, dict):
                     print(f"    📊 使用 akshare 基本面数据作为估值数据源...")
@@ -763,8 +774,8 @@ class InteractiveMarketAnalyzer:
                             mcp_metrics_success = True
                             print(f"    ✅ 从 akshare 获取到财务指标")
                 
-                # 如果没有 akshare 数据，尝试 MCP（只尝试第一个工具名称，快速失败）
-                if not mcp_metrics_success:
+                # 如果没有 akshare 数据，尝试 MCP（A 股跳过 yfinance）
+                if not mcp_metrics_success and use_yfinance_mcp:
                     # 只尝试最可能的工具名称，避免长时间等待
                     tool_name = "equity_fundamental_metrics"
                     try:
@@ -801,7 +812,9 @@ class InteractiveMarketAnalyzer:
                     except (asyncio.TimeoutError, Exception) as e:
                         # 快速失败，不尝试其他工具名称
                         print(f"    ⚠️ MCP 财务指标工具调用失败或超时: {str(e)[:50]}")
-                
+                elif not mcp_metrics_success and not use_yfinance_mcp:
+                    print(f"    🇨🇳 A 股跳过 MCP/yfinance 财务指标（避免 Yahoo 限流）")
+
                 # 如果 MCP 获取失败，尝试使用 akshare 基本面数据（作为最后的 fallback）
                 if not mcp_metrics_success and fundamentals and isinstance(fundamentals, dict):
                     print(f"    📊 使用 akshare 基本面数据作为财务指标数据源...")
@@ -956,6 +969,33 @@ class InteractiveMarketAnalyzer:
         except Exception as e:
             return {"error": str(e)}
     
+    def _hist_to_price_series(self, hist_data, max_days: int = 120) -> Optional[Dict[str, Any]]:
+        """从历史 K 线提取最近若干交易日的日期与收盘价，供前端绘制走势小图。"""
+        try:
+            import pandas as pd
+
+            if hist_data is None or hist_data.empty:
+                return None
+            df = hist_data.tail(max_days).copy()
+            date_col = next((c for c in ("日期", "date", "Date") if c in df.columns), None)
+            close_col = next((c for c in ("收盘", "close", "Close") if c in df.columns), None)
+            if not date_col or not close_col:
+                return None
+            dt = pd.to_datetime(df[date_col], errors="coerce")
+            closes = df[close_col]
+            dates_out: List[str] = []
+            closes_out: List[float] = []
+            for d, c in zip(dt, closes):
+                if pd.isna(d) or pd.isna(c):
+                    continue
+                dates_out.append(d.strftime("%Y-%m-%d"))
+                closes_out.append(float(c))
+            if len(closes_out) < 2:
+                return None
+            return {"dates": dates_out, "close": closes_out}
+        except Exception:
+            return None
+
     async def analyze_custom_stocks(
         self,
         stock_symbols: List[str],
@@ -1180,6 +1220,11 @@ class InteractiveMarketAnalyzer:
                     except Exception as e:
                         print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
             
+                if hist_data is not None and not hist_data.empty:
+                    ps = self._hist_to_price_series(hist_data, max_days=120)
+                    if ps:
+                        stock_analysis["price_series"] = ps
+
                 print()
                 return stock_analysis
             except Exception as e:

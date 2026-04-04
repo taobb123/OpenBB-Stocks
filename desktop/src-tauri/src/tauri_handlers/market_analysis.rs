@@ -18,6 +18,16 @@ pub struct AnalysisResponse {
     pub error: Option<String>,
 }
 
+/// 读取本地 UTF-8 文本文件（用于股票池路径等；需用户自行输入可信路径）
+#[tauri::command]
+pub fn read_utf8_text_file(path: String) -> Result<String, String> {
+    let p = PathBuf::from(path.trim());
+    if !p.is_file() {
+        return Err(format!("文件不存在或不是普通文件: {}", p.display()));
+    }
+    std::fs::read_to_string(&p).map_err(|e| format!("读取文件失败: {}", e))
+}
+
 /// 提取股票代码
 #[tauri::command]
 pub async fn extract_stock_codes(

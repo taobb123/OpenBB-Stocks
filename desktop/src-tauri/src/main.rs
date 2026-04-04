@@ -36,7 +36,7 @@ use crate::tauri_handlers::jupyter::{
 };
 
 use crate::tauri_handlers::market_analysis::{
-    analyze_custom_stocks, extract_stock_codes, run_full_market_analysis,
+    analyze_custom_stocks, extract_stock_codes, read_utf8_text_file, run_full_market_analysis,
 };
 
 use crate::tauri_handlers::credentials::{
@@ -544,6 +544,7 @@ fn main() {
             generate_self_signed_cert,
             update_openbb_settings,
             extract_stock_codes,
+            read_utf8_text_file,
             analyze_custom_stocks,
             run_full_market_analysis
         ])

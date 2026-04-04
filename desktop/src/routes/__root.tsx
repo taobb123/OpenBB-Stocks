@@ -241,7 +241,9 @@ function Root() {
 				)}
 			</div>
             <div className="bg-theme-secondary flex flex-1 min-h-0">
-                <main className={`flex-1 flex flex-col ${isLogsView ? "pl-5" : "px-5"}`}>
+                <main
+                    className={`flex-1 flex flex-col min-h-0 overflow-y-auto overscroll-y-contain ${isLogsView ? "pl-5" : "px-5"}`}
+                >
                     <Outlet />
                 </main>
             </div>

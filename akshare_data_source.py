@@ -18,6 +18,30 @@ except ImportError:
     print("⚠️ requests 未安装，iTick API 功能将不可用。请运行: pip install requests")
 
 
+def _symbol_to_ts_code(symbol: str) -> str:
+    """A 股 6 位代码 -> Tushare ts_code（如 600018.SH）。"""
+    s = (symbol or "").strip()
+    if len(s) != 6 or not s.isdigit():
+        return ""
+    if s.startswith("6"):
+        return f"{s}.SH"
+    return f"{s}.SZ"
+
+
+def _try_init_tushare_pro():
+    """从环境变量 TUSHARE_TOKEN 初始化 Tushare Pro；未配置则返回 None。"""
+    token = os.getenv("TUSHARE_TOKEN", "").strip()
+    if not token:
+        return None
+    try:
+        import tushare as ts
+        ts.set_token(token)
+        return ts.pro_api()
+    except Exception as e:
+        print(f"⚠️ Tushare Pro 初始化失败: {e}")
+        return None
+
+
 class AKShareDataSource:
     """AKShare 数据源封装类"""
     
@@ -26,13 +50,19 @@ class AKShareDataSource:
         初始化 AKShare 数据源
         
         Args:
-            itick_token: iTick API token，如果不提供则从环境变量 ITICK_TOKEN 读取
+            itick_token: iTick API token；为 None 时仅使用环境变量 ITICK_TOKEN（不设默认密钥）
         """
         self.available = self._check_availability()
-        # 从环境变量或参数获取 iTick token
-        self.itick_token = itick_token or os.getenv("ITICK_TOKEN", "")
-        # iTick 可用需要同时满足：有 token 且 requests 库已安装
+        if itick_token is not None and str(itick_token).strip():
+            self.itick_token = str(itick_token).strip()
+        else:
+            self.itick_token = os.getenv("ITICK_TOKEN", "").strip()
         self.itick_available = bool(self.itick_token) and REQUESTS_AVAILABLE
+        self.tushare_pro = _try_init_tushare_pro()
+        if self.tushare_pro:
+            print(
+                "✅ Tushare Pro 已启用（TUSHARE_TOKEN）：A 股数据优先走 Tushare，AkShare 为回退"
+            )
     
     def _check_availability(self) -> bool:
         """检查 akshare 是否可用"""
@@ -42,6 +72,126 @@ class AKShareDataSource:
         except ImportError:
             print("⚠️ akshare 未安装，请运行: pip install akshare")
             return False
+
+    def _get_hist_from_tushare(
+        self, symbol: str, start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        """Tushare daily 拉取 A 股日线，列名与 akshare 常用中文列对齐。"""
+        if not self.tushare_pro:
+            return pd.DataFrame()
+        ts_code = _symbol_to_ts_code(symbol)
+        if not ts_code:
+            return pd.DataFrame()
+        try:
+            print(f"  使用 Tushare daily 获取 {symbol} 历史数据（优先源）...")
+            df = self.tushare_pro.daily(
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            if df is None or df.empty:
+                return pd.DataFrame()
+            df = df.sort_values("trade_date")
+            out = pd.DataFrame(
+                {
+                    "日期": pd.to_datetime(df["trade_date"].astype(str)),
+                    "开盘": pd.to_numeric(df["open"], errors="coerce"),
+                    "收盘": pd.to_numeric(df["close"], errors="coerce"),
+                    "最高": pd.to_numeric(df["high"], errors="coerce"),
+                    "最低": pd.to_numeric(df["low"], errors="coerce"),
+                    "成交量": pd.to_numeric(df["vol"], errors="coerce") * 100.0,
+                }
+            )
+            out["date"] = out["日期"]
+            print(f"  ✅ Tushare 返回 {len(out)} 条日线")
+            return out
+        except Exception as e:
+            print(f"  ⚠️ Tushare daily 失败: {str(e)[:160]}")
+            return pd.DataFrame()
+
+    def _merge_tushare_daily_basic(
+        self,
+        symbol: str,
+        fundamentals: Dict[str, Any],
+        *,
+        prefer_first: bool = False,
+    ) -> None:
+        """
+        Tushare daily_basic：最新价、PE、PB、换手率等。
+        prefer_first=True 时由 Tushare 主导写入；False 时仅填补空缺字段。
+        """
+        if not self.tushare_pro:
+            return
+        ts_code = _symbol_to_ts_code(symbol)
+        if not ts_code:
+            return
+
+        def _set(key: str, value: Any) -> None:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return
+            if prefer_first or key not in fundamentals or fundamentals.get(key) is None:
+                fundamentals[key] = float(value) if isinstance(value, (int, float)) else value
+
+        try:
+            df = self.tushare_pro.daily_basic(
+                ts_code=ts_code,
+                fields="trade_date,close,turnover_rate,volume_ratio,pe_ttm,pb,total_mv,circ_mv",
+            )
+            if df is None or df.empty:
+                return
+            row = df.iloc[0]
+            _set("最新价", row.get("close"))
+            _set("市盈率", row.get("pe_ttm"))
+            _set("市净率", row.get("pb"))
+            _set("换手率", row.get("turnover_rate"))
+            if pd.notna(row.get("total_mv")):
+                _set("总市值", float(row["total_mv"]) * 10000.0)
+            if pd.notna(row.get("circ_mv")):
+                _set("流通市值", float(row["circ_mv"]) * 10000.0)
+            print(
+                f"  ✅ Tushare daily_basic（trade_date={row.get('trade_date', '')}）"
+            )
+        except Exception as e:
+            print(f"  ⚠️ Tushare daily_basic 失败: {str(e)[:160]}")
+
+    def _merge_tushare_fina_indicator(self, symbol: str, fundamentals: Dict[str, Any]) -> None:
+        """Tushare fina_indicator 最新一期，写入财务指标（与下游中英文键兼容）。"""
+        if not self.tushare_pro:
+            return
+        ts_code = _symbol_to_ts_code(symbol)
+        if not ts_code:
+            return
+        try:
+            df = self.tushare_pro.fina_indicator(ts_code=ts_code)
+            if df is None or df.empty:
+                return
+            if "end_date" in df.columns:
+                df = df.sort_values("end_date")
+            row = df.iloc[-1]
+            for col in df.columns:
+                v = row.get(col)
+                if col is not None and pd.notna(v):
+                    fundamentals[str(col)] = v
+            if pd.notna(row.get("roe")):
+                fundamentals["ROE"] = float(row["roe"])
+                fundamentals["净资产收益率"] = float(row["roe"])
+            if pd.notna(row.get("roa")):
+                fundamentals["ROA"] = float(row["roa"])
+                fundamentals["总资产收益率"] = float(row["roa"])
+            for src, dst in (
+                ("eps", "EPS"),
+                ("eps", "每股收益"),
+                ("bps", "每股净资产"),
+                ("ocfps", "每股现金流"),
+                ("grossprofit_margin", "毛利率"),
+                ("netprofit_margin", "净利率"),
+                ("netprofit_margin", "销售净利率"),
+            ):
+                if pd.notna(row.get(src)):
+                    fundamentals[dst] = float(row[src])
+            print(f"  ✅ Tushare fina_indicator（报告期 end_date={row.get('end_date', '')}）")
+        except Exception as e:
+            print(f"  ⚠️ Tushare fina_indicator 失败: {str(e)[:160]}")
     
     def get_stock_list(self) -> pd.DataFrame:
         """
@@ -92,7 +242,7 @@ class AKShareDataSource:
         Returns:
             历史价格数据 DataFrame
         """
-        if not self.available:
+        if not self.available and not self.tushare_pro:
             return pd.DataFrame()
         
         # 如果没有指定日期，默认获取最近1年
@@ -101,9 +251,25 @@ class AKShareDataSource:
         if not end_date:
             end_date = datetime.now().strftime("%Y%m%d")
         
-        # 直接使用 stock_zh_a_daily（稳定可用的接口）
+        if self.tushare_pro:
+            tu = self._get_hist_from_tushare(symbol, start_date, end_date)
+            if not tu.empty:
+                return tu
+            print(
+                f"  ℹ️ Tushare daily 无数据或拉取失败，改用 AkShare（{symbol}）"
+            )
+        else:
+            print(
+                "  ℹ️ 未启用 Tushare：当前进程无 TUSHARE_TOKEN。"
+                "请在启动 Django 的终端设置该变量，或在仓库根目录 / market_analysis_api 下配置 .env"
+            )
+
+        if not self.available:
+            return pd.DataFrame()
+        
+        # AkShare（Tushare 未配置或失败时的数据源；含前复权）
         try:
-            print(f"  使用 stock_zh_a_daily 获取 {symbol} 历史数据...")
+            print(f"  使用 stock_zh_a_daily（AkShare）获取 {symbol} 历史数据...")
             # stock_zh_a_daily 需要带市场前缀
             if symbol.startswith("6"):
                 daily_symbol = f"sh{symbol}"  # 上海
@@ -151,12 +317,38 @@ class AKShareDataSource:
         Returns:
             股票信息字典
         """
+        if not self.available and not self.tushare_pro:
+            return {}
+        
+        if self.tushare_pro:
+            ts_code = _symbol_to_ts_code(symbol)
+            if ts_code:
+                try:
+                    print(f"  优先使用 Tushare stock_basic 获取 {symbol} 基本信息...")
+                    df = self.tushare_pro.stock_basic(
+                        ts_code=ts_code,
+                        fields="ts_code,name,industry,area,market,list_date",
+                    )
+                    if df is not None and not df.empty:
+                        row = df.iloc[0]
+                        name = row.get("name") or ""
+                        industry = row.get("industry") or "N/A"
+                        if name:
+                            print("  ✅ Tushare stock_basic 获取到基本信息")
+                            return {
+                                "股票简称": name,
+                                "名称": name,
+                                "所属行业": industry,
+                                "行业": industry,
+                            }
+                except Exception as e:
+                    print(f"  ⚠️ Tushare stock_basic 失败: {str(e)[:200]}")
+        
         if not self.available:
             return {}
         
-        # 直接使用 stock_info_a_code_name（稳定可用）
         try:
-            print(f"  使用 stock_info_a_code_name 获取 {symbol} 基本信息...")
+            print(f"  使用 stock_info_a_code_name（AkShare 回退）获取 {symbol} 基本信息...")
             info = ak.stock_info_a_code_name()
             if not info.empty:
                 # 查找对应的股票代码
@@ -291,73 +483,88 @@ class AKShareDataSource:
         Returns:
             基本面数据字典
         """
-        if not self.available:
+        if not self.available and not self.tushare_pro:
             return {}
         
         try:
-            fundamentals = {}
-            
-            # 方法1：使用最稳定的财务分析指标接口（推荐，不走push2）
-            try:
-                print(f"  使用 stock_financial_analysis_indicator 获取 {symbol} 基本面数据...")
-                df = ak.stock_financial_analysis_indicator(symbol=symbol)
-                
-                if not df.empty:
-                    # 获取最新一期数据（通常是最后一行）
-                    latest = df.iloc[-1]
-                    
-                    # 提取关键指标
-                    for col in df.columns:
-                        value = latest.get(col)
-                        if pd.notna(value):
-                            # 转换列名为中文（如果可能）
-                            col_name = str(col)
-                            fundamentals[col_name] = value
-                    
-                    # 确保关键指标存在
-                    key_mappings = {
-                        "市盈率": ["市盈率", "PE", "pe", "市盈率TTM"],
-                        "市净率": ["市净率", "PB", "pb", "市净率MRQ"],
-                        "ROE": ["净资产收益率", "ROE", "roe", "净资产收益率TTM"],
-                        "ROA": ["总资产收益率", "ROA", "roa"],
-                        "毛利率": ["毛利率", "销售毛利率", "毛利率TTM"],
-                        "净利率": ["净利率", "销售净利率", "净利率TTM"],
-                        "EPS": ["每股收益", "EPS", "eps", "基本每股收益"],
-                        "每股净资产": ["每股净资产", "BPS", "bps"],
-                        "每股现金流": ["每股现金流", "每股经营现金流"],
-                        "营业收入": ["营业收入", "营业总收入"],
-                        "净利润": ["净利润", "归属净利润"]
-                    }
-                    
-                    # 尝试找到关键指标
-                    for key, possible_names in key_mappings.items():
-                        if key not in fundamentals:
-                            for name in possible_names:
-                                if name in fundamentals:
-                                    fundamentals[key] = fundamentals[name]
-                                    break
-                    
-                    print(f"  ✅ 通过 stock_financial_analysis_indicator 获取到 {len(fundamentals)} 个指标")
-            except Exception as e:
-                print(f"  ⚠️ stock_financial_analysis_indicator 失败: {e}")
-            
-            # 方法2：使用 iTick API 获取实时行情数据（补充到基本面数据中）
-            if self.itick_available:
+            fundamentals: Dict[str, Any] = {}
+            key_mappings = {
+                "市盈率": ["市盈率", "PE", "pe", "市盈率TTM"],
+                "市净率": ["市净率", "PB", "pb", "市净率MRQ"],
+                "ROE": ["净资产收益率", "ROE", "roe", "净资产收益率TTM"],
+                "ROA": ["总资产收益率", "ROA", "roa"],
+                "毛利率": ["毛利率", "销售毛利率", "毛利率TTM"],
+                "净利率": ["净利率", "销售净利率", "净利率TTM"],
+                "EPS": ["每股收益", "EPS", "eps", "基本每股收益"],
+                "每股净资产": ["每股净资产", "BPS", "bps"],
+                "每股现金流": ["每股现金流", "每股经营现金流"],
+                "营业收入": ["营业收入", "营业总收入"],
+                "净利润": ["净利润", "归属净利润"],
+            }
+
+            if self.tushare_pro:
+                print(f"  优先使用 Tushare Pro 获取 {symbol} 基本面…")
+                self._merge_tushare_daily_basic(symbol, fundamentals, prefer_first=True)
+                self._merge_tushare_fina_indicator(symbol, fundamentals)
+
+            if self.available:
                 try:
-                    print(f"  使用 iTick API 获取 {symbol} 实时行情...")
+                    print(
+                        f"  使用 AkShare stock_financial_analysis_indicator 补齐 {symbol} 空缺字段…"
+                    )
+                    df = ak.stock_financial_analysis_indicator(symbol=symbol)
+                    if not df.empty:
+                        latest = df.iloc[-1]
+                        ak_part: Dict[str, Any] = {}
+                        for col in df.columns:
+                            value = latest.get(col)
+                            if pd.notna(value):
+                                ak_part[str(col)] = value
+                        for key, possible_names in key_mappings.items():
+                            if key not in ak_part:
+                                for name in possible_names:
+                                    if name in ak_part:
+                                        ak_part[key] = ak_part[name]
+                                        break
+                        if self.tushare_pro:
+                            for k, v in ak_part.items():
+                                if v is None or (
+                                    isinstance(v, float) and pd.isna(v)
+                                ):
+                                    continue
+                                cur = fundamentals.get(k)
+                                if cur is None or (
+                                    isinstance(cur, float) and pd.isna(cur)
+                                ):
+                                    fundamentals[k] = v
+                        else:
+                            fundamentals.update(ak_part)
+                            for key, possible_names in key_mappings.items():
+                                if key not in fundamentals:
+                                    for name in possible_names:
+                                        if name in fundamentals:
+                                            fundamentals[key] = fundamentals[name]
+                                            break
+                        print(
+                            f"  ✅ AkShare 合并后基本面字段约 {len(fundamentals)} 个"
+                        )
+                except Exception as e:
+                    print(f"  ⚠️ stock_financial_analysis_indicator 失败: {e}")
+
+            # 已配置 Tushare 时不再请求 iTick（通常无权限；避免 401）
+            if self.itick_available and not self.tushare_pro:
+                try:
+                    print(f"  使用 iTick API 获取 {symbol} 实时行情…")
                     realtime_data = self._get_realtime_from_itick(symbol)
                     if realtime_data:
-                        # 将实时行情数据合并到基本面数据中
                         fundamentals.update(realtime_data)
                         print(f"  ✅ 通过 iTick API 获取到实时行情数据")
                 except Exception as e:
                     print(f"  ⚠️ iTick API 获取实时行情失败: {e}")
             
-            # 方法3：获取财务报表摘要（如果方法1失败）
-            if not fundamentals:
+            if not fundamentals and self.available:
                 try:
-                    print(f"  尝试使用 stock_financial_report_sina 获取 {symbol} 财务数据...")
-                    # 获取利润表最新数据
+                    print(f"  尝试使用 stock_financial_report_sina 获取 {symbol} 财务数据…")
                     income = ak.stock_financial_report_sina(stock=symbol, symbol="利润表")
                     if not income.empty:
                         latest_income = income.iloc[-1]
