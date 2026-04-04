@@ -45,7 +45,7 @@ API 将在 `http://localhost:8000/api/` 可用（或你指定的端口）。
 }
 ```
 
-### 2. 分析自定义股票列表（选项2）
+### 2. 分析自定义股票列表（选项2，完整）
 - **URL**: `/api/analyze-custom-stocks/`
 - **方法**: POST
 - **Body**:
@@ -54,6 +54,35 @@ API 将在 `http://localhost:8000/api/` 可用（或你指定的端口）。
   "stock_codes": ["600519", "000001"],
   "market_type": "A股"
 }
+```
+
+**curl 示例**（端口按你 `runserver` 为准，此处为 8000）：
+```bash
+curl -X POST http://localhost:8000/api/analyze-custom-stocks/ \
+  -H "Content-Type: application/json" \
+  -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
+```
+
+### 2a. 仅走势图（charts）
+- **URL**: `/api/analyze-custom-stocks/charts/`
+- **方法**: POST
+- **Body**: 与上面相同。
+
+```bash
+curl -X POST http://localhost:8000/api/analyze-custom-stocks/charts/ \
+  -H "Content-Type: application/json" \
+  -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
+```
+
+### 2b. 买入/时机分析报告（report）
+- **URL**: `/api/analyze-custom-stocks/report/`
+- **方法**: POST
+- **Body**: 与上面相同。
+
+```bash
+curl -X POST http://localhost:8000/api/analyze-custom-stocks/report/ \
+  -H "Content-Type: application/json" \
+  -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
 ```
 
 ### 3. 运行完整市场分析（选项4）

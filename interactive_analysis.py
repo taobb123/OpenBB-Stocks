@@ -996,10 +996,60 @@ class InteractiveMarketAnalyzer:
         except Exception:
             return None
 
+    async def _analyze_stock_charts_only(
+        self, symbol: str, index: int, total: int
+    ) -> Dict[str, Any]:
+        """仅历史 K 线 + 简称：供走势图专用接口，不做时机/基本面/MCP。"""
+        try:
+            print(f"[{index}/{total}] 走势图数据 {symbol}...")
+            stock_analysis: Dict[str, Any] = {
+                "symbol": symbol,
+                "profile": {},
+                "timing": {},
+                "fundamentals": {},
+            }
+            if not self.akshare:
+                return {
+                    **stock_analysis,
+                    "error": "AKShare 不可用",
+                }
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+            hist_data = self.akshare.get_stock_historical(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                period="daily",
+                adjust="qfq",
+            )
+            stock_info = self.akshare.get_stock_info(symbol)
+            if stock_info:
+                stock_analysis["profile"] = {
+                    "info": stock_info,
+                    "name": stock_info.get("股票简称", stock_info.get("名称", symbol)),
+                    "industry": stock_info.get("所属行业", stock_info.get("行业", "N/A")),
+                    "concept": stock_info.get("概念板块", "N/A"),
+                }
+            if hist_data is not None and not hist_data.empty:
+                ps = self._hist_to_price_series(hist_data, max_days=120)
+                if ps:
+                    stock_analysis["price_series"] = ps
+            return stock_analysis
+        except Exception as e:
+            print(f"  ❌ 走势图数据 {symbol} 出错: {str(e)[:200]}")
+            return {
+                "symbol": symbol,
+                "error": str(e),
+                "timing": {},
+                "fundamentals": {},
+                "profile": {},
+            }
+
     async def analyze_custom_stocks(
         self,
         stock_symbols: List[str],
-        market_type: str = "A股"
+        market_type: str = "A股",
+        scope: str = "full",
     ) -> Dict[str, Any]:
         """
         分析用户提供的股票列表
@@ -1007,12 +1057,15 @@ class InteractiveMarketAnalyzer:
         Args:
             stock_symbols: 股票代码列表
             market_type: 市场类型
+            scope: full=完整（含 price_series）；charts=仅走势；report=买入/时机/报告用（不含 price_series）
         
         Returns:
             分析结果
         """
+        if scope not in ("full", "charts", "report"):
+            scope = "full"
         print(f"\n{'='*60}")
-        print(f"📊 分析 {len(stock_symbols)} 只自定义股票")
+        print(f"📊 分析 {len(stock_symbols)} 只自定义股票 [scope={scope}]")
         print(f"{'='*60}\n")
         
         results = {
@@ -1025,6 +1078,8 @@ class InteractiveMarketAnalyzer:
         # 使用 asyncio.gather 并行处理，但限制并发数避免API限流
         async def analyze_single_stock(symbol: str, index: int, total: int) -> Dict[str, Any]:
             """分析单只股票的异步函数"""
+            if scope == "charts":
+                return await self._analyze_stock_charts_only(symbol, index, total)
             try:
                 print(f"[{index}/{total}] 分析 {symbol}...")
                 
@@ -1220,7 +1275,7 @@ class InteractiveMarketAnalyzer:
                     except Exception as e:
                         print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
             
-                if hist_data is not None and not hist_data.empty:
+                if scope == "full" and hist_data is not None and not hist_data.empty:
                     ps = self._hist_to_price_series(hist_data, max_days=120)
                     if ps:
                         stock_analysis["price_series"] = ps

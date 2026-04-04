@@ -184,10 +184,11 @@ def analyze_custom_stocks_api(request):
                 # 使用 akshare 进行分析（OpenBB SDK 已禁用，技术指标使用 akshare 数据计算）
                 analyzer = InteractiveMarketAnalyzer(use_akshare=True, use_openbb=False)
                 
-                # 执行分析
+                # 执行分析（full：含 price_series + 完整字段）
                 analysis = await analyzer.analyze_custom_stocks(
                     stock_codes,
-                    market_type=market_type
+                    market_type=market_type,
+                    scope="full",
                 )
                 
                 # 生成报告（即使分析有部分错误，也尝试生成报告）
@@ -270,6 +271,175 @@ def analyze_custom_stocks_api(request):
             'success': False,
             'error': str(e)[:500],
             'report': f'分析失败:\n{str(e)[:500]}\n\n请检查后端日志获取详细信息。'
+        }, status=500)
+
+
+@csrf_exempt
+def analyze_custom_stocks_charts_api(request):
+    """
+    自定义股票 — 仅走势图数据（历史 K 线序列 + 简称，不做时机/基本面/MCP）
+    POST /api/analyze-custom-stocks/charts/
+    Body 与 /api/analyze-custom-stocks/ 相同
+    """
+    if request.method != "POST":
+        return JsonResponse({
+            "success": False,
+            "error": "此端点仅支持 POST 请求",
+            "method": request.method,
+            "allowed_methods": ["POST"],
+        }, status=405)
+    try:
+        data = json.loads(request.body)
+        stock_codes = data.get("stock_codes", [])
+        market_type = data.get("market_type", "A股")
+        if not stock_codes:
+            return JsonResponse({
+                "success": False,
+                "error": "股票代码列表不能为空",
+            }, status=400)
+
+        InteractiveMarketAnalyzer = get_interactive_analyzer()
+
+        async def run_analysis():
+            analyzer = None
+            try:
+                analyzer = InteractiveMarketAnalyzer(use_akshare=True, use_openbb=False)
+                analysis = await analyzer.analyze_custom_stocks(
+                    stock_codes,
+                    market_type=market_type,
+                    scope="charts",
+                )
+                return {
+                    "success": True,
+                    "data": analysis,
+                    "report": "",
+                    "scope": "charts",
+                }
+            except Exception as analysis_error:
+                error_msg = str(analysis_error)
+                print(f"❌ 走势图分析出错: {error_msg[:500]}")
+                return {
+                    "success": False,
+                    "error": error_msg[:500],
+                    "report": "",
+                    "data": None,
+                    "scope": "charts",
+                }
+            finally:
+                if analyzer:
+                    try:
+                        await analyzer.close()
+                    except Exception:
+                        pass
+
+        result = asyncio.run(run_analysis())
+        result = make_json_serializable(result)
+        result = make_json_serializable(result)
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError):
+            result = make_json_serializable(result)
+        return JsonResponse(result)
+    except Exception as e:
+        import traceback
+        print(f"❌ charts API: {traceback.format_exc()}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)[:500],
+            "scope": "charts",
+        }, status=500)
+
+
+@csrf_exempt
+def analyze_custom_stocks_report_api(request):
+    """
+    自定义股票 — 买入/时机/报告专用（不含 price_series，生成报告并写入 Buy.txt）
+    POST /api/analyze-custom-stocks/report/
+    Body 与 /api/analyze-custom-stocks/ 相同
+    """
+    if request.method != "POST":
+        return JsonResponse({
+            "success": False,
+            "error": "此端点仅支持 POST 请求",
+            "method": request.method,
+            "allowed_methods": ["POST"],
+        }, status=405)
+    try:
+        data = json.loads(request.body)
+        stock_codes = data.get("stock_codes", [])
+        market_type = data.get("market_type", "A股")
+        if not stock_codes:
+            return JsonResponse({
+                "success": False,
+                "error": "股票代码列表不能为空",
+            }, status=400)
+
+        InteractiveMarketAnalyzer = get_interactive_analyzer()
+
+        async def run_analysis():
+            analyzer = None
+            try:
+                analyzer = InteractiveMarketAnalyzer(use_akshare=True, use_openbb=False)
+                analysis = await analyzer.analyze_custom_stocks(
+                    stock_codes,
+                    market_type=market_type,
+                    scope="report",
+                )
+                report = ""
+                try:
+                    import time
+                    t0 = time.time()
+                    report = analyzer.format_custom_analysis_report(analysis)
+                    print(f"✅ 报告生成完成，耗时 {time.time() - t0:.2f} 秒")
+                except Exception as report_error:
+                    print(f"⚠️ 生成报告时出错: {str(report_error)[:200]}")
+                    report = f"分析完成，但报告生成时出现错误: {str(report_error)[:200]}\n\n"
+                    if analysis and analysis.get("stocks"):
+                        report += f"共分析 {len(analysis.get('stocks', []))} 只股票\n"
+                try:
+                    analyzer._save_buy_recommendations(analysis.get("stocks", []))
+                except Exception as save_error:
+                    print(f"⚠️ 保存买入建议时出错: {str(save_error)[:200]}")
+                return {
+                    "success": True,
+                    "data": analysis,
+                    "report": report,
+                    "scope": "report",
+                }
+            except Exception as analysis_error:
+                error_msg = str(analysis_error)
+                print(f"❌ 报告分析出错: {error_msg[:500]}")
+                error_report = f"分析过程中出现错误:\n{error_msg[:500]}\n\n"
+                error_report += f"已分析的股票代码: {', '.join(stock_codes)}\n"
+                return {
+                    "success": False,
+                    "error": error_msg[:500],
+                    "report": error_report,
+                    "data": None,
+                    "scope": "report",
+                }
+            finally:
+                if analyzer:
+                    try:
+                        await analyzer.close()
+                    except Exception:
+                        pass
+
+        result = asyncio.run(run_analysis())
+        result = make_json_serializable(result)
+        result = make_json_serializable(result)
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError):
+            result = make_json_serializable(result)
+        return JsonResponse(result)
+    except Exception as e:
+        import traceback
+        print(f"❌ report API: {traceback.format_exc()}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)[:500],
+            "scope": "report",
         }, status=500)
 
 

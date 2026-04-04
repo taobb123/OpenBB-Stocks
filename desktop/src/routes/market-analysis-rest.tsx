@@ -4,6 +4,7 @@ import {
 	useEffect,
 	useCallback,
 	useRef,
+	useMemo,
 	type ChangeEventHandler,
 } from "react";
 import { Button } from "@openbb/ui-pro";
@@ -18,6 +19,14 @@ import {
 const LS_STOCK_POOL_PATH = "stocks_pool_file_path";
 const DEFAULT_STOCK_POOL_PATH =
 	"D:\\RunTest\\pyb124\\py_rotation_trade\\A_stocks\\ma_strategy_project\\pybroker_integration\\stocks_pool.txt";
+
+/** 规范化 API 路径（API_BASE_URL 已含 /api 时拼接子路径） */
+function apiSubpath(sub: string): string {
+	const s = sub.startsWith("/") ? sub.slice(1) : sub;
+	return `${API_BASE_URL.replace(/\/$/, "")}/${s}`
+		.replace(/([^:]\/)\/+/g, "$1")
+		.replace(":/", "://");
+}
 
 function isTauriRuntime(): boolean {
 	if (typeof window === "undefined") return false;
@@ -47,14 +56,91 @@ interface AnalysisResponse {
 	error?: string;
 }
 
+/** 切换路由后恢复「市场分析 REST」页状态（localStorage，约 5MB 上限） */
+const LS_MAR_PAGE_STATE = "odp_market_analysis_rest_v1";
+
+type PersistedMARPayload = {
+	v: 1;
+	mode: "file" | "full" | null;
+	fileContent: string;
+	extractedCodes: string[];
+	analysisResult: AnalysisResponse | null;
+	fullAnalysisResult: AnalysisResponse | null;
+	poolCodes: string[];
+	poolLoadMessage: string | null;
+	chartStocks: StockChartRow[];
+	chartPage: number;
+	chartsPerPage: number;
+	batchSize: number;
+	poolFilePath: string;
+};
+
+function readPersistedMAR(): Partial<PersistedMARPayload> | null {
+	if (typeof window === "undefined") return null;
+	try {
+		const raw = localStorage.getItem(LS_MAR_PAGE_STATE);
+		if (!raw) return null;
+		const o = JSON.parse(raw) as PersistedMARPayload;
+		if (o?.v !== 1) return null;
+		return o;
+	} catch {
+		return null;
+	}
+}
+
+function stripHeavyForStorage(
+	payload: PersistedMARPayload,
+): PersistedMARPayload {
+	const lightCharts: StockChartRow[] = payload.chartStocks.map((row) => {
+		const { price_series: _p, ...rest } = row;
+		return { ...rest };
+	});
+	return {
+		...payload,
+		analysisResult: payload.analysisResult
+			? { ...payload.analysisResult, data: undefined }
+			: null,
+		fullAnalysisResult: payload.fullAnalysisResult
+			? { ...payload.fullAnalysisResult, data: undefined }
+			: null,
+		chartStocks: lightCharts,
+	};
+}
+
+function persistMARState(payload: PersistedMARPayload): void {
+	try {
+		localStorage.setItem(LS_MAR_PAGE_STATE, JSON.stringify(payload));
+	} catch {
+		try {
+			localStorage.setItem(
+				LS_MAR_PAGE_STATE,
+				JSON.stringify(stripHeavyForStorage(payload)),
+			);
+		} catch {
+			console.warn(
+				"[market-analysis-rest] localStorage 空间不足，已跳过持久化（可少存一些股票走势图）",
+			);
+		}
+	}
+}
+
 function MarketAnalysisRest() {
-	const [mode, setMode] = useState<"file" | "full" | null>(null);
-	const [fileContent, setFileContent] = useState("");
-	const [extractedCodes, setExtractedCodes] = useState<string[]>([]);
+	const restored = useMemo(() => readPersistedMAR(), []);
+
+	const [mode, setMode] = useState<"file" | "full" | null>(
+		restored?.mode ?? null,
+	);
+	const [fileContent, setFileContent] = useState(restored?.fileContent ?? "");
+	const [extractedCodes, setExtractedCodes] = useState<string[]>(
+		restored?.extractedCodes ?? [],
+	);
 	const [loading, setLoading] = useState(false);
-	const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
+	const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
+		restored?.analysisResult ?? null,
+	);
 	// 独立的状态：完整市场分析结果（固定在右侧宽区域）
-	const [fullAnalysisResult, setFullAnalysisResult] = useState<AnalysisResponse | null>(null);
+	const [fullAnalysisResult, setFullAnalysisResult] =
+		useState<AnalysisResponse | null>(restored?.fullAnalysisResult ?? null);
 	const [fullAnalysisLoading, setFullAnalysisLoading] = useState(false);
 	const [isFullReportModalOpen, setFullReportModalOpen] = useState(false);
 	const [isFileReportModalOpen, setFileReportModalOpen] = useState(false);
@@ -63,6 +149,7 @@ function MarketAnalysisRest() {
 
 	const [poolFilePath, setPoolFilePath] = useState(() => {
 		try {
+			if (restored?.poolFilePath) return restored.poolFilePath;
 			return (
 				localStorage.getItem(LS_STOCK_POOL_PATH) || DEFAULT_STOCK_POOL_PATH
 			);
@@ -70,12 +157,20 @@ function MarketAnalysisRest() {
 			return DEFAULT_STOCK_POOL_PATH;
 		}
 	});
-	const [poolCodes, setPoolCodes] = useState<string[]>([]);
-	const [poolLoadMessage, setPoolLoadMessage] = useState<string | null>(null);
-	const [chartStocks, setChartStocks] = useState<StockChartRow[]>([]);
-	const [chartPage, setChartPage] = useState(1);
-	const [chartsPerPage, setChartsPerPage] = useState(6);
-	const [batchSize, setBatchSize] = useState(8);
+	const [poolCodes, setPoolCodes] = useState<string[]>(
+		restored?.poolCodes ?? [],
+	);
+	const [poolLoadMessage, setPoolLoadMessage] = useState<string | null>(
+		restored?.poolLoadMessage ?? null,
+	);
+	const [chartStocks, setChartStocks] = useState<StockChartRow[]>(
+		restored?.chartStocks ?? [],
+	);
+	const [chartPage, setChartPage] = useState(restored?.chartPage ?? 1);
+	const [chartsPerPage, setChartsPerPage] = useState(
+		restored?.chartsPerPage ?? 6,
+	);
+	const [batchSize, setBatchSize] = useState(restored?.batchSize ?? 8);
 	const [batchLoading, setBatchLoading] = useState(false);
 	const [batchProgress, setBatchProgress] = useState<{
 		current: number;
@@ -164,6 +259,46 @@ function MarketAnalysisRest() {
 		}
 	}, [chartStocks.length, chartsPerPage, chartPage]);
 
+	const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		const payload: PersistedMARPayload = {
+			v: 1,
+			mode,
+			fileContent,
+			extractedCodes,
+			analysisResult,
+			fullAnalysisResult,
+			poolCodes,
+			poolLoadMessage,
+			chartStocks,
+			chartPage,
+			chartsPerPage,
+			batchSize,
+			poolFilePath,
+		};
+		if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+		persistTimerRef.current = setTimeout(() => {
+			persistTimerRef.current = null;
+			persistMARState(payload);
+		}, 400);
+		return () => {
+			if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+		};
+	}, [
+		mode,
+		fileContent,
+		extractedCodes,
+		analysisResult,
+		fullAnalysisResult,
+		poolCodes,
+		poolLoadMessage,
+		chartStocks,
+		chartPage,
+		chartsPerPage,
+		batchSize,
+		poolFilePath,
+	]);
+
 	const persistPoolPath = useCallback((path: string) => {
 		setPoolFilePath(path);
 		try {
@@ -221,7 +356,8 @@ function MarketAnalysisRest() {
 		ev.target.value = "";
 	};
 
-	const runBatchedChartAnalysis = async () => {
+	/** 股票池：仅走势图（后端 scope=charts，不跑时机/基本面/MCP） */
+	const runBatchedPoolCharts = async () => {
 		if (!apiReady) {
 			setError("API 未就绪，请确保后端服务器正在运行");
 			return;
@@ -245,24 +381,24 @@ function MarketAnalysisRest() {
 			for (let i = 0; i < chunks.length; i++) {
 				if (signal.aborted) break;
 				setBatchProgress({ current: i + 1, total: chunks.length });
-				const analyzeUrl = `${API_BASE_URL}/analyze-custom-stocks/`
-					.replace(/\/+/g, "/")
-					.replace(":/", "://");
-				const analyzeResponse = await fetch(analyzeUrl, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						stock_codes: chunks[i],
-						market_type: "A股",
-					}),
-					signal,
-				});
+				const analyzeResponse = await fetch(
+					apiSubpath("analyze-custom-stocks/charts/"),
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							stock_codes: chunks[i],
+							market_type: "A股",
+						}),
+						signal,
+					},
+				);
 				if (signal.aborted) break;
 				const analysisData: AnalysisResponse = await analyzeResponse.json();
 				if (!analyzeResponse.ok || !analysisData.success) {
 					const errText =
 						analysisData.error ||
-						`批次 ${i + 1}/${chunks.length} HTTP ${analyzeResponse.status}`;
+						`走势图批次 ${i + 1}/${chunks.length} HTTP ${analyzeResponse.status}`;
 					setError(errText);
 					break;
 				}
@@ -281,6 +417,101 @@ function MarketAnalysisRest() {
 				if (merged.length > 0) {
 					setChartStocks(merged);
 					setChartPage(1);
+				}
+				return;
+			}
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBatchLoading(false);
+			setBatchProgress(null);
+			if (analysisAbortRef.current === ac) {
+				analysisAbortRef.current = null;
+			}
+		}
+	};
+
+	/** 股票池：买入/时机分析报告（后端 scope=report，无 price_series，写 Buy.txt） */
+	const runBatchedPoolReport = async () => {
+		if (!apiReady) {
+			setError("API 未就绪，请确保后端服务器正在运行");
+			return;
+		}
+		if (poolCodes.length === 0) {
+			setError("请先从股票池文件加载代码列表");
+			return;
+		}
+		const size = Math.min(40, Math.max(1, batchSize));
+		const chunks = chunkArray(poolCodes, size);
+		analysisAbortRef.current?.abort();
+		const ac = new AbortController();
+		analysisAbortRef.current = ac;
+		const { signal } = ac;
+
+		setBatchLoading(true);
+		setError(null);
+		setBatchProgress({ current: 0, total: chunks.length });
+		const mergedStocks: unknown[] = [];
+		const reportParts: string[] = [];
+		try {
+			for (let i = 0; i < chunks.length; i++) {
+				if (signal.aborted) break;
+				setBatchProgress({ current: i + 1, total: chunks.length });
+				const analyzeResponse = await fetch(
+					apiSubpath("analyze-custom-stocks/report/"),
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							stock_codes: chunks[i],
+							market_type: "A股",
+						}),
+						signal,
+					},
+				);
+				if (signal.aborted) break;
+				const analysisData: AnalysisResponse = await analyzeResponse.json();
+				if (!analyzeResponse.ok || !analysisData.success) {
+					const errText =
+						analysisData.error ||
+						`报告批次 ${i + 1}/${chunks.length} HTTP ${analyzeResponse.status}`;
+					setError(errText);
+					setAnalysisResult({
+						success: false,
+						error: errText,
+						report: analysisData.report || errText,
+						data: { stocks: mergedStocks },
+					});
+					break;
+				}
+				const stocks = (analysisData.data as { stocks?: unknown[] } | undefined)
+					?.stocks;
+				if (stocks?.length) {
+					mergedStocks.push(...stocks);
+				}
+				if (analysisData.report) {
+					reportParts.push(analysisData.report);
+				}
+			}
+			if (!signal.aborted && reportParts.length > 0) {
+				setAnalysisResult({
+					success: true,
+					data: { stocks: mergedStocks },
+					report: reportParts.join(
+						"\n\n──────── 批次分隔 ────────\n\n",
+					),
+				});
+				setError(null);
+			}
+		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "AbortError") {
+				if (reportParts.length > 0) {
+					setAnalysisResult({
+						success: true,
+						data: { stocks: mergedStocks },
+						report: reportParts.join(
+							"\n\n──────── 批次分隔 ────────\n\n",
+						),
+					});
 				}
 				return;
 			}
@@ -345,11 +576,15 @@ function MarketAnalysisRest() {
 				return;
 			}
 
-			// 步骤2：运行分析
-			console.log(`正在调用分析 API: ${API_BASE_URL}/analyze-custom-stocks/`);
+			// 步骤2：买入/时机分析报告（专用接口，不含走势图 price_series）
+			console.log(
+				`正在调用分析 API: ${apiSubpath("analyze-custom-stocks/report/")}`,
+			);
 			console.log(`请求数据:`, { stock_codes: extractData.stock_codes, market_type: "A股" });
 			
-			const analyzeResponse = await fetch(`${API_BASE_URL}/analyze-custom-stocks/`, {
+			const analyzeResponse = await fetch(
+				apiSubpath("analyze-custom-stocks/report/"),
+				{
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -357,7 +592,8 @@ function MarketAnalysisRest() {
 					market_type: "A股",
 				}),
 				signal,
-			});
+			},
+			);
 
 			console.log(`分析 API 响应状态: ${analyzeResponse.status} ${analyzeResponse.statusText}`);
 
@@ -688,7 +924,8 @@ function MarketAnalysisRest() {
 								</h3>
 								<p className="text-xs text-gray-600 leading-relaxed">
 									在 Tauri 桌面窗口中可使用下方路径直接读取本机文件；若用浏览器打开本页，请使用「选择
-									.txt」。约 240 只股票将按批次请求后端，避免单次超时；分析完成后在页面底部以多图网格分页展示收盘价走势。
+									.txt」。股票池与右侧「买入分析」已拆成两个后端接口：「仅走势图」只拉 K
+									线（更快）；「分批报告」跑时机/基本面并写入 Buy.txt。二者可分开执行。
 								</p>
 								<div>
 									<label className="block text-xs font-medium text-gray-700 mb-1">
@@ -787,29 +1024,54 @@ function MarketAnalysisRest() {
 										/>
 									</div>
 								</div>
-								<Button
-									type="button"
-									onClick={runBatchedChartAnalysis}
-									disabled={
-										batchLoading ||
-										poolCodes.length === 0 ||
-										!apiReady
-									}
-									className="text-white font-medium"
-									style={{
-										color: "#ffffff",
-										backgroundColor:
+								<div className="flex flex-col gap-2 max-w-md">
+									<Button
+										type="button"
+										onClick={runBatchedPoolCharts}
+										disabled={
 											batchLoading ||
 											poolCodes.length === 0 ||
 											!apiReady
-												? "#9ca3af"
-												: "#059669",
-									}}
-								>
-									{batchLoading && batchProgress
-										? `分批分析中 ${batchProgress.current}/${batchProgress.total}…`
-										: "分批分析并显示走势"}
-								</Button>
+										}
+										className="text-white font-medium w-full"
+										style={{
+											color: "#ffffff",
+											backgroundColor:
+												batchLoading ||
+												poolCodes.length === 0 ||
+												!apiReady
+													? "#9ca3af"
+													: "#059669",
+										}}
+									>
+										{batchLoading && batchProgress
+											? `走势批次 ${batchProgress.current}/${batchProgress.total}…`
+											: "分批获取走势图（仅 K 线）"}
+									</Button>
+									<Button
+										type="button"
+										onClick={runBatchedPoolReport}
+										disabled={
+											batchLoading ||
+											poolCodes.length === 0 ||
+											!apiReady
+										}
+										className="text-white font-medium w-full"
+										style={{
+											color: "#ffffff",
+											backgroundColor:
+												batchLoading ||
+												poolCodes.length === 0 ||
+												!apiReady
+													? "#9ca3af"
+													: "#2563eb",
+										}}
+									>
+										{batchLoading && batchProgress
+											? `报告批次 ${batchProgress.current}/${batchProgress.total}…`
+											: "分批生成买入分析报告（右侧）"}
+									</Button>
+								</div>
 							</div>
 
 							{extractedCodes.length > 0 && (

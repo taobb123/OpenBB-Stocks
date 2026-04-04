@@ -19,14 +19,31 @@ curl -X POST http://localhost:8003/api/extract-stock-codes/ \
   -d '{"content": "立讯精密（002475）、歌尔股份（002241）"}'
 ```
 
-### 3. 分析自定义股票列表（POST 请求）
+### 3. 分析自定义股票列表（完整，POST）
+与历史行为一致：K 线、指标、报告等（`scope=full`）。
 ```bash
 curl -X POST http://localhost:8003/api/analyze-custom-stocks/ \
   -H "Content-Type: application/json" \
   -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
 ```
 
-### 4. 运行完整市场分析（POST 请求）
+### 4. 仅走势图 / K 线（charts，POST）
+请求体与上面相同；响应侧重历史 K 线与绘图数据，不做完整时机/基本面/MCP。返回 JSON 中含 `scope: "charts"`，`report` 为空字符串。
+```bash
+curl -X POST http://localhost:8003/api/analyze-custom-stocks/charts/ \
+  -H "Content-Type: application/json" \
+  -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
+```
+
+### 5. 买入/时机分析报告（report，POST）
+请求体相同；生成文本报告并写入 `Buy.txt` 等逻辑；响应中通常不含 `price_series`（`scope=report`）。返回 JSON 中含 `scope: "report"`。
+```bash
+curl -X POST http://localhost:8003/api/analyze-custom-stocks/report/ \
+  -H "Content-Type: application/json" \
+  -d '{"stock_codes": ["600519", "000001"], "market_type": "A股"}'
+```
+
+### 6. 运行完整市场分析（POST 请求）
 ```bash
 curl -X POST http://localhost:8003/api/run-full-analysis/ \
   -H "Content-Type: application/json" \
@@ -48,5 +65,5 @@ curl -X POST http://localhost:8003/api/run-full-analysis/ \
 推荐使用：
 - **Postman** - 图形化 API 测试工具
 - **curl** - 命令行工具
-- **前端页面** - `http://localhost:1470/market-analysis-rest`
+- **前端页面** - `http://localhost:1472/market-analysis-rest`
 
