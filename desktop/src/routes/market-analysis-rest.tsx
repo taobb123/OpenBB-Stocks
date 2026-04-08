@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
 	useState,
 	useEffect,
+	useLayoutEffect,
 	useCallback,
 	useRef,
 	useMemo,
@@ -176,6 +177,13 @@ function MarketAnalysisRest() {
 		current: number;
 		total: number;
 	} | null>(null);
+	const [stockChartJumpInput, setStockChartJumpInput] = useState("");
+	const [stockChartJumpError, setStockChartJumpError] = useState<string | null>(
+		null,
+	);
+	const [pendingStockChartJump, setPendingStockChartJump] = useState<
+		string | null
+	>(null);
 	const poolFileInputRef = useRef<HTMLInputElement>(null);
 	const analysisAbortRef = useRef<AbortController | null>(null);
 
@@ -258,6 +266,49 @@ function MarketAnalysisRest() {
 			setChartPage(totalPages);
 		}
 	}, [chartStocks.length, chartsPerPage, chartPage]);
+
+	const jumpToStockChart = useCallback(() => {
+		setStockChartJumpError(null);
+		const digits = stockChartJumpInput.replace(/\D/g, "");
+		if (digits.length < 6) {
+			setStockChartJumpError("请输入 6 位股票代码（可粘贴含数字的文本，自动取前 6 位）");
+			return;
+		}
+		const code = digits.slice(0, 6);
+		const idx = chartStocks.findIndex((s) => s.symbol === code);
+		if (idx < 0) {
+			setStockChartJumpError(`股票池中未找到 ${code}`);
+			return;
+		}
+		const totalPages = Math.max(
+			1,
+			Math.ceil(chartStocks.length / Math.max(1, chartsPerPage)),
+		);
+		const page = Math.min(
+			totalPages,
+			Math.floor(idx / Math.max(1, chartsPerPage)) + 1,
+		);
+		setChartPage(page);
+		setPendingStockChartJump(code);
+	}, [stockChartJumpInput, chartStocks, chartsPerPage]);
+
+	useLayoutEffect(() => {
+		if (!pendingStockChartJump) return;
+		const code = pendingStockChartJump;
+		setPendingStockChartJump(null);
+		const el = document.getElementById(`mar-stock-${code}`);
+		if (!el) return;
+		el.scrollIntoView({ behavior: "smooth", block: "center" });
+		el.classList.add("ring-2", "ring-blue-500", "ring-offset-2", "rounded-lg");
+		window.setTimeout(() => {
+			el.classList.remove(
+				"ring-2",
+				"ring-blue-500",
+				"ring-offset-2",
+				"rounded-lg",
+			);
+		}, 2000);
+	}, [pendingStockChartJump, chartPage]);
 
 	const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => {
@@ -1317,7 +1368,48 @@ function MarketAnalysisRest() {
 			</div>
 
 			{chartStocks.length > 0 && (
-				<div className="mt-8 w-full">
+				<div className="mt-8 w-full space-y-3">
+					<div className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+						<div className="min-w-[200px] flex-1 text-gray-900">
+							<label
+								htmlFor="mar-stock-chart-jump"
+								className="mb-1 block text-xs font-medium text-gray-600"
+							>
+								跳转到股票小图（代码）
+							</label>
+							<input
+								id="mar-stock-chart-jump"
+								type="text"
+								inputMode="numeric"
+								autoComplete="off"
+								placeholder="例如 600519"
+								value={stockChartJumpInput}
+								onChange={(e) => {
+									setStockChartJumpInput(e.target.value);
+									setStockChartJumpError(null);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										e.preventDefault();
+										jumpToStockChart();
+									}
+								}}
+								className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-inherit caret-gray-900 placeholder:text-gray-500 !bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								style={{ color: "inherit" }}
+							/>
+						</div>
+						<Button
+							type="button"
+							variant="default"
+							onClick={jumpToStockChart}
+							className="text-black"
+						>
+							跳转
+						</Button>
+						{stockChartJumpError && (
+							<p className="w-full text-sm text-red-600">{stockChartJumpError}</p>
+						)}
+					</div>
 					<StockPoolChartGrid
 						stocks={chartStocks}
 						page={chartPage}

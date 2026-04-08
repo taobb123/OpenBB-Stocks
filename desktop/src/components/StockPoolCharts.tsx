@@ -178,7 +178,8 @@ export function StockPoolChartGrid({
 				{slice.map((row) => (
 					<div
 						key={row.symbol}
-						className="border border-gray-200 rounded-lg p-3 bg-gray-50/80"
+						id={`mar-stock-${row.symbol}`}
+						className="border border-gray-200 rounded-lg p-3 bg-gray-50/80 scroll-mt-4"
 					>
 						<div className="flex justify-between items-start gap-2 mb-2">
 							<div>
