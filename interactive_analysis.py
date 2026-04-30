@@ -969,8 +969,8 @@ class InteractiveMarketAnalyzer:
         except Exception as e:
             return {"error": str(e)}
     
-    def _hist_to_price_series(self, hist_data, max_days: int = 120) -> Optional[Dict[str, Any]]:
-        """从历史 K 线提取最近若干交易日的日期与收盘价，供前端绘制走势小图。"""
+    def _hist_to_price_series(self, hist_data, max_days: int = 80) -> Optional[Dict[str, Any]]:
+        """从历史 K 线提取最近若干交易日的 OHLCV，供前端绘制股票池蜡烛+成交量小图。"""
         try:
             import pandas as pd
 
@@ -978,21 +978,52 @@ class InteractiveMarketAnalyzer:
                 return None
             df = hist_data.tail(max_days).copy()
             date_col = next((c for c in ("日期", "date", "Date") if c in df.columns), None)
+            open_col = next((c for c in ("开盘", "open", "Open") if c in df.columns), None)
+            high_col = next((c for c in ("最高", "high", "High") if c in df.columns), None)
+            low_col = next((c for c in ("最低", "low", "Low") if c in df.columns), None)
             close_col = next((c for c in ("收盘", "close", "Close") if c in df.columns), None)
-            if not date_col or not close_col:
+            volume_col = next((c for c in ("成交量", "volume", "Volume", "vol", "VOL") if c in df.columns), None)
+            if not date_col or not close_col or not open_col or not high_col or not low_col:
                 return None
             dt = pd.to_datetime(df[date_col], errors="coerce")
-            closes = df[close_col]
+            o_s = df[open_col]
+            h_s = df[high_col]
+            l_s = df[low_col]
+            c_s = df[close_col]
+            v_s = df[volume_col] if volume_col else None
             dates_out: List[str] = []
-            closes_out: List[float] = []
-            for d, c in zip(dt, closes):
-                if pd.isna(d) or pd.isna(c):
+            open_out: List[float] = []
+            high_out: List[float] = []
+            low_out: List[float] = []
+            close_out: List[float] = []
+            volume_out: List[float] = []
+            for i, (d, o, h, lo, c) in enumerate(zip(dt, o_s, h_s, l_s, c_s)):
+                if pd.isna(d) or pd.isna(o) or pd.isna(h) or pd.isna(lo) or pd.isna(c):
                     continue
+                fv = float(o)
+                gh = float(h)
+                gl = float(lo)
+                fc = float(c)
+                vv = v_s.iloc[i] if v_s is not None else 0.0
+                vol = 0.0 if pd.isna(vv) else max(float(vv), 0.0)
+                if gh < gl:
+                    gh, gl = gl, gh
                 dates_out.append(d.strftime("%Y-%m-%d"))
-                closes_out.append(float(c))
-            if len(closes_out) < 2:
+                open_out.append(fv)
+                high_out.append(gh)
+                low_out.append(gl)
+                close_out.append(fc)
+                volume_out.append(vol)
+            if len(close_out) < 2:
                 return None
-            return {"dates": dates_out, "close": closes_out}
+            return {
+                "dates": dates_out,
+                "open": open_out,
+                "high": high_out,
+                "low": low_out,
+                "close": close_out,
+                "volume": volume_out,
+            }
         except Exception:
             return None
 
@@ -1031,7 +1062,7 @@ class InteractiveMarketAnalyzer:
                     "concept": stock_info.get("概念板块", "N/A"),
                 }
             if hist_data is not None and not hist_data.empty:
-                ps = self._hist_to_price_series(hist_data, max_days=120)
+                ps = self._hist_to_price_series(hist_data, max_days=80)
                 if ps:
                     stock_analysis["price_series"] = ps
             return stock_analysis
@@ -1276,7 +1307,7 @@ class InteractiveMarketAnalyzer:
                         print(f"    ⚠️ MCP 分析异常: {str(e)[:100]}")
             
                 if scope == "full" and hist_data is not None and not hist_data.empty:
-                    ps = self._hist_to_price_series(hist_data, max_days=120)
+                    ps = self._hist_to_price_series(hist_data, max_days=80)
                     if ps:
                         stock_analysis["price_series"] = ps
 
