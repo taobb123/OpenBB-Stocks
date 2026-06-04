@@ -1,5 +1,7 @@
 /** 股票池：解析每行代码、分页网格、K 线蜡烛小图（SVG，红涨绿跌） */
 
+import { useState } from "react";
+
 export type PriceSeriesLine = { dates: string[]; close: number[] };
 export type PriceSeriesOhlc = {
 	dates: string[];
@@ -170,9 +172,10 @@ function maPolylinePoints(
 }
 
 const MA10_STROKE = "#ca8a04";
-const MA30_STROKE = "#9333ea";
+const MA5_STROKE = "#9333ea";
 
 function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
+	const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 	const w = 300;
 	const h = 120;
 	const pad = 6;
@@ -200,8 +203,6 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 
 	const first = dates[0] ?? "";
 	const last = dates[dates.length - 1] ?? "";
-	const lastClose = close[close.length - 1];
-	const lastVolume = volume[volume.length - 1] ?? 0;
 
 	const bars = open.map((o, i) => {
 		const hhi = high[i]!;
@@ -214,6 +215,7 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 		const yC = yPx(c);
 		const xCenter = pad + (i + 0.5) * slotW;
 		const isFlat = Math.abs(c - o) < 1e-6 || Math.abs(yO - yC) < 0.4;
+		const isBearish = !isFlat && c < o;
 		let fill: string;
 		let stroke: string;
 		if (isFlat) {
@@ -233,6 +235,10 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 		const vBarH = Math.max(0.5, vNorm * volH);
 		return {
 			i,
+			o,
+			c,
+			llo,
+			hhi,
 			yH,
 			yL,
 			xCenter,
@@ -242,27 +248,51 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 			fill,
 			stroke,
 			isFlat,
+			isBearish,
+			v,
 			volY: volBottom - vBarH,
 			volH: vBarH,
 		};
 	});
 
+	const displayIndex = hoverIndex ?? n - 1;
+	const displayDate = dates[displayIndex] ?? "";
+	const displayClose = close[displayIndex]!;
+	const displayLow = low[displayIndex]!;
+	const displayVol = volume[displayIndex] ?? 0;
+	const hoveredBar = bars[displayIndex];
+	const isHovering = hoverIndex != null;
+
 	const ma10 = smaSeries(close, 10);
-	const ma30 = smaSeries(close, 30);
+	const ma5 = smaSeries(close, 5);
 	const ma10Pts = maPolylinePoints(ma10, pad, slotW, yPx);
-	const ma30Pts = maPolylinePoints(ma30, pad, slotW, yPx);
+	const ma5Pts = maPolylinePoints(ma5, pad, slotW, yPx);
+
+	const footerLabel = (() => {
+		if (!hoveredBar) {
+			return `收盘 ${displayClose.toFixed(2)} · 量 ${displayVol.toFixed(0)}`;
+		}
+		if (hoveredBar.isBearish) {
+			return `最低 ${displayLow.toFixed(2)} · 收盘 ${displayClose.toFixed(2)} · 量 ${displayVol.toFixed(0)}`;
+		}
+		if (hoveredBar.isFlat) {
+			return `收盘 ${displayClose.toFixed(2)} · 量 ${displayVol.toFixed(0)}`;
+		}
+		return `收盘 ${displayClose.toFixed(2)} · 量 ${displayVol.toFixed(0)}`;
+	})();
 
 	return (
 		<div>
 			<svg
 				width={w}
 				height={h}
-				className="block"
+				className="block cursor-crosshair"
 				role="img"
-				aria-label="K 线蜡烛图、10 日与 30 日均线及成交量"
+				aria-label="K 线蜡烛图、10 日与 5 日均线及成交量"
+				onMouseLeave={() => setHoverIndex(null)}
 			>
 				{bars.map((b) => (
-					<g key={b.i}>
+					<g key={b.i} pointerEvents="none">
 						<line
 							x1={b.xCenter}
 							x2={b.xCenter}
@@ -301,14 +331,14 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 						/>
 					</g>
 				))}
-				{ma30Pts ? (
+				{ma5Pts ? (
 					<polyline
 						fill="none"
-						stroke={MA30_STROKE}
+						stroke={MA5_STROKE}
 						strokeWidth={1.35}
 						strokeLinejoin="round"
 						strokeLinecap="round"
-						points={ma30Pts}
+						points={ma5Pts}
 					/>
 				) : null}
 				{ma10Pts ? (
@@ -319,6 +349,30 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 						strokeLinejoin="round"
 						strokeLinecap="round"
 						points={ma10Pts}
+					/>
+				) : null}
+				{bars.map((b) => (
+					<rect
+						key={`hit-${b.i}`}
+						x={pad + b.i * slotW}
+						y={priceTop}
+						width={slotW}
+						height={volBottom - priceTop}
+						fill="transparent"
+						onMouseEnter={() => setHoverIndex(b.i)}
+					/>
+				))}
+				{hoverIndex != null && bars[hoverIndex] ? (
+					<line
+						x1={bars[hoverIndex]!.xCenter}
+						x2={bars[hoverIndex]!.xCenter}
+						y1={priceTop}
+						y2={volBottom}
+						stroke="#64748b"
+						strokeWidth={1}
+						strokeDasharray="3 2"
+						opacity={0.65}
+						pointerEvents="none"
 					/>
 				) : null}
 			</svg>
@@ -333,17 +387,19 @@ function MiniCandlestick({ series }: { series: PriceSeriesOhlc }) {
 				<span className="inline-flex items-center gap-1">
 					<span
 						className="inline-block w-3 h-0.5 rounded"
-						style={{ backgroundColor: MA30_STROKE }}
+						style={{ backgroundColor: MA5_STROKE }}
 					/>
-					MA30
+					MA5
 				</span>
 			</div>
 			<div className="flex justify-between text-[11px] text-gray-500 mt-1 font-mono">
-				<span>{first}</span>
-				<span className="text-black font-medium">
-					收盘 {lastClose.toFixed(2)} · 量 {lastVolume.toFixed(0)}
+				<span>{isHovering ? displayDate : first}</span>
+				<span
+					className={`font-medium ${isHovering && hoveredBar?.isBearish ? "text-green-700" : "text-black"}`}
+				>
+					{footerLabel}
 				</span>
-				<span>{last}</span>
+				<span>{isHovering ? "" : last}</span>
 			</div>
 		</div>
 	);
